@@ -19,6 +19,7 @@
 	<callback>set_sample_rate($sample_rate)</callback>
 	<callback>set_avg_alpha($avg_alpha)</callback>
 	<callback>set_average($average)</callback>
+	<callback>set_vec_rate($frame_rate)</callback>
 	<param>
 		<name>Input Type</name>
 		<key>type</key>
