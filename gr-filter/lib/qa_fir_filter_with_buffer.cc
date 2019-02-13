@@ -25,14 +25,15 @@
 #endif
 
 #include <gnuradio/types.h>
-#include <qa_fir_filter_with_buffer.h>
 #include <gnuradio/filter/fir_filter_with_buffer.h>
 #include <gnuradio/fft/fft.h>
-#include <volk/volk.h>
-#include <cppunit/TestAssert.h>
-#include <cmath>
 #include <gnuradio/random.h>
+#include <volk/volk.h>
+#include <boost/test/unit_test.hpp>
+#include <cmath>
 #include <cstring>
+
+using std::vector;
 
 namespace gr {
   namespace filter {
@@ -72,8 +73,6 @@ namespace gr {
       typedef float tap_type;
       typedef float acc_type;
 
-      using std::vector;
-
       static o_type
       ref_dotprod(const i_type input[], const tap_type taps[], int ntaps)
       {
@@ -84,31 +83,12 @@ namespace gr {
 	return sum;
       }
 
-      void
-      qa_fir_filter_with_buffer_fff::t1()
-      {
-	test_decimate(1);
-      }
-
-      void
-      qa_fir_filter_with_buffer_fff::t2()
-      {
-	test_decimate(2);
-      }
-
-      void
-      qa_fir_filter_with_buffer_fff::t3()
-      {
-	test_decimate(5);
-      }
-
       //
       // Test for ntaps in [0,9], and input lengths in [0,17].
       // This ensures that we are building the shifted taps correctly,
       // and exercises all corner cases on input alignment and length.
       //
-      void
-      qa_fir_filter_with_buffer_fff::test_decimate(unsigned int decimate)
+      void test_decimate(unsigned int decimate)
       {
 	const int MAX_TAPS   = 29;
 	const int OUTPUT_LEN = 37;
@@ -122,7 +102,6 @@ namespace gr {
 	o_type   *actual_output = (float*)volk_malloc(OUTPUT_LEN*sizeof(float), align);
 	tap_type *taps = (float*)volk_malloc(MAX_TAPS*sizeof(float), align);
 
-	srandom(0);	// we want reproducibility
 	memset(dline, 0, INPUT_LEN*sizeof(i_type));
 
 	for(int n = 0; n <= MAX_TAPS; n++) {
@@ -161,7 +140,7 @@ namespace gr {
 	    // arithmetic.
 
 	    for(int o = 0; o < (int)(ol/decimate); o++) {
-	      CPPUNIT_ASSERT_DOUBLES_EQUAL(expected_output[o], actual_output[o],
+	      BOOST_CHECK(std::abs(expected_output[o] - actual_output[o]) <=
 			     sqrt((float)n)*0.25*MAX_DATA*MAX_DATA * ERR_DELTA);
 	    }
 	    delete f1;
@@ -173,6 +152,22 @@ namespace gr {
 	volk_free(actual_output);
 	volk_free(taps);
       }
+
+      BOOST_AUTO_TEST_CASE(t1_fff)
+      {
+	test_decimate(1);
+      }
+
+      BOOST_AUTO_TEST_CASE(t2_fff)
+      {
+	test_decimate(2);
+      }
+
+      BOOST_AUTO_TEST_CASE(t3_fff)
+      {
+	test_decimate(5);
+      }
+
 
     } /* namespace fff */
 
@@ -187,7 +182,6 @@ namespace gr {
       typedef gr_complex tap_type;
       typedef gr_complex acc_type;
 
-      using std::vector;
 
       static o_type
       ref_dotprod(const i_type input[], const tap_type taps[], int ntaps)
@@ -200,31 +194,13 @@ namespace gr {
 	return sum;
       }
 
-      void
-      qa_fir_filter_with_buffer_ccc::t1()
-      {
-	test_decimate(1);
-      }
-
-      void
-      qa_fir_filter_with_buffer_ccc::t2()
-      {
-	test_decimate(2);
-      }
-
-      void
-      qa_fir_filter_with_buffer_ccc::t3()
-      {
-	test_decimate(5);
-      }
-
       //
       // Test for ntaps in [0,9], and input lengths in [0,17].
       // This ensures that we are building the shifted taps correctly,
       // and exercises all corner cases on input alignment and length.
       //
       void
-      qa_fir_filter_with_buffer_ccc::test_decimate(unsigned int decimate)
+      test_decimate(unsigned int decimate)
       {
 	const int MAX_TAPS   = 29;
 	const int OUTPUT_LEN = 37;
@@ -238,7 +214,6 @@ namespace gr {
 	o_type   *actual_output = (gr_complex*)volk_malloc(OUTPUT_LEN*sizeof(gr_complex), align);
 	tap_type *taps = (gr_complex*)volk_malloc(MAX_TAPS*sizeof(gr_complex), align);
 
-	srandom(0);	// we want reproducibility
 	memset(dline, 0, INPUT_LEN*sizeof(i_type));
 
 	for(int n = 0; n <= MAX_TAPS; n++) {
@@ -277,7 +252,7 @@ namespace gr {
 	    // arithmetic.
 
 	    for(int o = 0; o < (int)(ol/decimate); o++) {
-	      CPPUNIT_ASSERT_COMPLEXES_EQUAL(expected_output[o], actual_output[o],
+	      BOOST_CHECK(std::abs(expected_output[o] - actual_output[o]) <=
 			      sqrt((float)n)*0.25*MAX_DATA*MAX_DATA * ERR_DELTA);
 	    }
 	    delete f1;
@@ -288,6 +263,21 @@ namespace gr {
 	volk_free(expected_output);
 	volk_free(actual_output);
 	volk_free(taps);
+      }
+
+      BOOST_AUTO_TEST_CASE(t1_ccc)
+      {
+	test_decimate(1);
+      }
+
+      BOOST_AUTO_TEST_CASE(t2_ccc)
+      {
+	test_decimate(2);
+      }
+
+      BOOST_AUTO_TEST_CASE(t3_ccc)
+      {
+	test_decimate(5);
       }
 
     } /* namespace ccc */
@@ -302,8 +292,6 @@ namespace gr {
       typedef float      tap_type;
       typedef gr_complex acc_type;
 
-      using std::vector;
-
       static o_type
       ref_dotprod(const i_type input[], const tap_type taps[], int ntaps)
       {
@@ -316,31 +304,12 @@ namespace gr {
 	return sum;
      }
 
-      void
-      qa_fir_filter_with_buffer_ccf::t1()
-      {
-	test_decimate(1);
-      }
-
-      void
-      qa_fir_filter_with_buffer_ccf::t2()
-      {
-	test_decimate(2);
-      }
-
-      void
-      qa_fir_filter_with_buffer_ccf::t3()
-      {
-	test_decimate(5);
-      }
-
       //
       // Test for ntaps in [0,9], and input lengths in [0,17].
       // This ensures that we are building the shifted taps correctly,
       // and exercises all corner cases on input alignment and length.
       //
-      void
-      qa_fir_filter_with_buffer_ccf::test_decimate(unsigned int decimate)
+      void test_decimate(unsigned int decimate)
       {
 	const int MAX_TAPS   = 29;
 	const int OUTPUT_LEN = 37;
@@ -354,7 +323,6 @@ namespace gr {
 	o_type   *actual_output = (gr_complex*)volk_malloc(OUTPUT_LEN*sizeof(gr_complex), align);
 	tap_type *taps = (float*)volk_malloc(MAX_TAPS*sizeof(float), align);
 
-	srandom(0);	// we want reproducibility
 	memset(dline, 0, INPUT_LEN*sizeof(i_type));
 
 	for(int n = 0; n <= MAX_TAPS; n++) {
@@ -393,7 +361,7 @@ namespace gr {
 	    // arithmetic.
 
 	    for(int o = 0; o < (int)(ol/decimate); o++) {
-	      CPPUNIT_ASSERT_COMPLEXES_EQUAL(expected_output[o], actual_output[o],
+	      BOOST_CHECK(std::abs(expected_output[o] - actual_output[o]) <=
 			      sqrt((float)n)*0.25*MAX_DATA*MAX_DATA * ERR_DELTA);
 	    }
 	    delete f1;
@@ -404,6 +372,21 @@ namespace gr {
 	volk_free(expected_output);
 	volk_free(actual_output);
 	volk_free(taps);
+      }
+
+      BOOST_AUTO_TEST_CASE(t1_ccf)
+      {
+	test_decimate(1);
+      }
+
+      BOOST_AUTO_TEST_CASE(t2_ccf)
+      {
+	test_decimate(2);
+      }
+
+      BOOST_AUTO_TEST_CASE(t3_ccf)
+      {
+	test_decimate(5);
       }
 
     } /* namespace ccf */

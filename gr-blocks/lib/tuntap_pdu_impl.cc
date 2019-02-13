@@ -57,7 +57,7 @@ namespace gr {
       :	block("tuntap_pdu",
 		 io_signature::make (0, 0, 0),
 		 io_signature::make (0, 0, 0)),
-	stream_pdu_base(MTU),
+	stream_pdu_base(istunflag ? MTU : MTU + 14),
 	d_dev(dev),
 	d_istunflag(istunflag)
     {
@@ -76,6 +76,14 @@ namespace gr {
       if (d_fd <= 0)
         throw std::runtime_error("gr::tuntap_pdu::make: tun_alloc failed (are you running as root?)");
 
+      int err = set_mtu(dev_cstr, MTU);
+      if(err < 0)
+        std::cerr << boost::format(
+          "gr::tuntap_pdu: failed to set MTU to %d.\n"
+          "You should use ifconfig to set the MTU. E.g.,\n"
+          "  $ sudo ifconfig %s mtu %d\n"
+          ) % MTU % dev % MTU << std::endl;
+
       std::cout << boost::format(
 	"Allocated virtual ethernet interface: %s\n"
         "You must now use ifconfig to set its IP address. E.g.,\n"
@@ -84,12 +92,12 @@ namespace gr {
         ) % dev % dev << std::endl;
 
       // set up output message port
-      message_port_register_out(PDU_PORT_ID);
-      start_rxthread(this, PDU_PORT_ID);
+      message_port_register_out(pdu::pdu_port_id());
+      start_rxthread(this, pdu::pdu_port_id());
 
       // set up input message port
-      message_port_register_in(PDU_PORT_ID);
-      set_msg_handler(PDU_PORT_ID, boost::bind(&tuntap_pdu_impl::send, this, _1));
+      message_port_register_in(pdu::pdu_port_id());
+      set_msg_handler(pdu::pdu_port_id(), boost::bind(&tuntap_pdu_impl::send, this, _1));
     }
 
     int
@@ -139,6 +147,34 @@ namespace gr {
        * with the virtual interface
        */
       return fd;
+    }
+
+    int
+    tuntap_pdu_impl::set_mtu(const char *dev, int MTU)
+    {
+      struct ifreq ifr;
+      int sfd, err;
+
+      /* MTU must be set by passing a socket fd to ioctl;
+       * create an arbitrary socket for this purpose
+       */
+      if ((sfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+          return sfd;
+
+      /* preparation of the struct ifr, of type "struct ifreq" */
+      memset(&ifr, 0, sizeof(ifr));
+      strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+      ifr.ifr_addr.sa_family = AF_INET; /* address family */
+      ifr.ifr_mtu = MTU;
+
+      /* try to set MTU */
+      if ((err = ioctl(sfd, SIOCSIFMTU, (void *) &ifr)) < 0) {
+          close(sfd);
+          return err;
+      }
+
+      close(sfd);
+      return MTU;
     }
 #endif
 

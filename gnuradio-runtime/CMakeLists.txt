@@ -23,6 +23,8 @@
 include(GrBoost)
 include(GrPython)
 
+find_package(MPLIB REQUIRED)
+
 ########################################################################
 # Setup compatibility checks and defines
 ########################################################################
@@ -37,12 +39,15 @@ GR_REGISTER_COMPONENT("gnuradio-runtime" ENABLE_GNURADIO_RUNTIME
     Boost_FOUND
     ENABLE_VOLK
     PYTHONINTERP_FOUND
+    MPLIB_FOUND
+    LOG4CPP_FOUND
 )
 
 GR_SET_GLOBAL(GNURADIO_RUNTIME_INCLUDE_DIRS
     ${CMAKE_BINARY_DIR}
     ${CMAKE_SOURCE_DIR}/gnuradio-runtime/include
     ${CMAKE_BINARY_DIR}/gnuradio-runtime/include
+    ${LOG4CPP_INCLUDE_DIRS}
 )
 
 GR_SET_GLOBAL(GNURADIO_RUNTIME_SWIG_INCLUDE_DIRS
@@ -62,16 +67,6 @@ GR_SET_GLOBAL(GNURADIO_RUNTIME_PYTHONPATH ${GNURADIO_RUNTIME_PYTHONPATH})
 
 FIND_PACKAGE(SWIG)
 
-if(SWIG_FOUND)
-  set(SWIG_VERSION_CHECK FALSE)
-  if("${SWIG_VERSION}" VERSION_GREATER "2.0.0")
-    set(SWIG_VERSION_CHECK TRUE)
-  else("${SWIG_VERSION}" VERSION_GREATER "2.0.0")
-    message(STATUS "")
-    message(STATUS "Ctrlport requires SWIG version >= 2.0")
-  endif()
-endif(SWIG_FOUND)
-
 GR_REGISTER_COMPONENT("gr-ctrlport" ENABLE_GR_CTRLPORT
   Boost_FOUND
   SWIG_FOUND
@@ -89,39 +84,6 @@ get_filename_component(GR_RUNTIME_PYTHONPATH
 )
 GR_SET_GLOBAL(GR_RUNTIME_PYTHONPATH ${GR_RUNTIME_PYTHONPATH})
 
-########################################################################
-# Setup CPack components
-########################################################################
-include(GrPackage)
-CPACK_SET(CPACK_COMPONENT_GROUP_RUNTIME_DESCRIPTION "GNU Radio Runtime")
-
-CPACK_COMPONENT("runtime_runtime"
-    GROUP        "Runtime"
-    DISPLAY_NAME "Runtime"
-    DESCRIPTION  "Dynamic link libraries"
-    DEPENDS      "runtime_runtime"
-)
-
-CPACK_COMPONENT("runtime_devel"
-    GROUP        "Runtime"
-    DISPLAY_NAME "Development"
-    DESCRIPTION  "C++ headers, package config, import libraries"
-    DEPENDS      "runtime_devel"
-)
-
-CPACK_COMPONENT("runtime_python"
-    GROUP        "Runtime"
-    DISPLAY_NAME "Python"
-    DESCRIPTION  "Python modules for runtime"
-    DEPENDS      "runtime_python;runtime_runtime"
-)
-
-CPACK_COMPONENT("runtime_swig"
-    GROUP        "Runtime"
-    DISPLAY_NAME "SWIG"
-    DESCRIPTION  "SWIG development .i files"
-    DEPENDS      "runtime_swig;runtime_python;runtime_devel"
-)
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/gnuradio-runtime.conf.in
     ${CMAKE_CURRENT_BINARY_DIR}/gnuradio-runtime.conf
@@ -130,16 +92,15 @@ configure_file(
 install(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/gnuradio-runtime.conf
     DESTINATION ${GR_PREFSDIR}
-    COMPONENT "runtime_runtime"
 )
 
-if(ENABLE_GR_LOG AND HAVE_LOG4CPP)
 install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/gr_log_default.conf
     DESTINATION ${GR_PREFSDIR}
-    COMPONENT "runtime_runtime"
 )
-endif(ENABLE_GR_LOG AND HAVE_LOG4CPP)
+
+set(PC_ADD_LIBS "${MPLIB_PC_ADD_LIBS} ${PC_ADD_LIBS}")
+set(PC_ADD_CFLAGS ${MPLIB_PC_ADD_CFLAGS})
 
 ########################################################################
 # Add subdirectories
@@ -147,11 +108,9 @@ endif(ENABLE_GR_LOG AND HAVE_LOG4CPP)
 add_subdirectory(include)
 add_subdirectory(lib)
 add_subdirectory(apps)
-#add_subdirectory(doc)
 if(ENABLE_PYTHON)
      add_subdirectory(swig)
      add_subdirectory(python)
-#    add_subdirectory(grc)
     add_subdirectory(examples)
 endif(ENABLE_PYTHON)
 
@@ -166,7 +125,6 @@ configure_file(
 install(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/gnuradio-runtime.pc
     DESTINATION ${GR_LIBRARY_DIR}/pkgconfig
-    COMPONENT "runtime_devel"
 )
 
 endif(ENABLE_GNURADIO_RUNTIME)

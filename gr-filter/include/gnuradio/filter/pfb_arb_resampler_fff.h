@@ -86,7 +86,7 @@ namespace gr {
      *      attenuation_dB=ATT, window=filter.firdes.WIN_BLACKMAN_hARRIS)</EM></B>
      *
      * The theory behind this block can be found in Chapter 7.5 of the
-     * following book.
+     * following book:
      *
      *   <B><EM>f. harris, "Multirate Signal Processing for Communication
      *      Systems", Upper Saddle River, NJ: Prentice Hall, Inc. 2004.</EM></B>
@@ -99,7 +99,7 @@ namespace gr {
       typedef boost::shared_ptr<pfb_arb_resampler_fff> sptr;
 
       /*!
-       * Build the polyphase filterbank arbitray resampler.
+       * Build the polyphase filterbank arbitrary resampler.
        * \param rate  (float) Specifies the resampling rate to use
        * \param taps  (vector/list of floats) The prototype filter to populate the filterbank. The taps
        *                                      should be generated at the filter_size sampling rate.

@@ -19,13 +19,15 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
+#include <gnuradio/qtgui/timecontrolpanel.h>
 
-#include <cmath>
+#include <gnuradio/qtgui/timedisplayform.h>
+
 #include <QMessageBox>
 #include <QSpacerItem>
 #include <QGroupBox>
-#include <gnuradio/qtgui/timedisplayform.h>
-#include <gnuradio/qtgui/timecontrolpanel.h>
+
+#include <cmath>
 #include <iostream>
 
 
@@ -62,6 +64,8 @@ TimeDisplayForm::TimeDisplayForm(int nplots, QWidget* parent)
   d_menu->addAction(d_nptsmenu);
   connect(d_nptsmenu, SIGNAL(whichTrigger(int)),
 	  this, SLOT(setNPoints(const int)));
+  connect(this, SIGNAL(signalNPoints(const int)),
+	  d_nptsmenu, SLOT(setDiagText(const int)));
 
   d_stemmenu = new QAction("Stem Plot", this);
   d_stemmenu->setCheckable(true);
@@ -81,7 +85,7 @@ TimeDisplayForm::TimeDisplayForm(int nplots, QWidget* parent)
   connect(d_semilogymenu, SIGNAL(triggered(bool)),
 	  this, SLOT(setSemilogy(bool)));
 
-  for(int i = 0; i < d_nplots; i++) {
+  for(unsigned int i = 0; i < d_nplots; ++i) {
     d_tagsmenu.push_back(new QAction("Show Tag Makers", this));
     d_tagsmenu[i]->setCheckable(true);
     d_tagsmenu[i]->setChecked(true);
@@ -295,7 +299,7 @@ void
 TimeDisplayForm::setNPoints(const int npoints)
 {
   d_npoints = npoints;
-  d_nptsmenu->setDiagText(d_npoints);
+  emit signalNPoints(npoints);
 }
 
 void
@@ -342,7 +346,7 @@ TimeDisplayForm::setSemilogy(bool en)
 }
 
 void
-TimeDisplayForm::setTagMenu(int which, bool en)
+TimeDisplayForm::setTagMenu(unsigned int which, bool en)
 {
   getPlot()->enableTagMarker(which, en);
   d_tagsmenu[which]->setChecked(en);
@@ -523,7 +527,7 @@ TimeDisplayForm::getTriggerTagKey() const
 
 
 /********************************************************************
- * Notifcation messages from the control panel
+ * Notification messages from the control panel
  *******************************************************************/
 
 void

@@ -33,8 +33,6 @@ namespace gr {
     {
     private:
       generic_decoder::sptr d_decoder;
-      size_t d_input_item_size;
-      size_t d_output_item_size;
 
       pmt::pmt_t d_in_port;
       pmt::pmt_t d_out_port;
@@ -43,6 +41,7 @@ namespace gr {
 
       bool d_packed;
       bool d_rev_pack;
+      int d_mtu;
 
       size_t d_max_bits_in;
       float *d_tmp_f32;
@@ -54,7 +53,8 @@ namespace gr {
 
     public:
       async_decoder_impl(generic_decoder::sptr my_decoder,
-                         bool packed=false, bool rev_pack=true);
+                         bool packed=false, bool rev_pack=true,
+                         int mtu=1500);
       ~async_decoder_impl();
 
       int general_work(int noutput_items,

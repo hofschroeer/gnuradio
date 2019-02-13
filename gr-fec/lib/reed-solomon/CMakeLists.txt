@@ -20,7 +20,7 @@
 ########################################################################
 # This file included, use CMake directory variables
 ########################################################################
-#MSVC workaround: we cant have dynamically sized arrays.
+#MSVC workaround: we can't have dynamically sized arrays.
 #So ifdef a max array bounds that is larger than NN and NROOTS
 #Its a bit of a hack, but if you look at the code, its so full of ifdefs,
 #and lacks optimization where it should be pre-allocating these arrays.
@@ -46,7 +46,6 @@ list(APPEND gnuradio_fec_sources ${gr_fec_rs_sources})
 #install(
 #    FILES ${CMAKE_CURRENT_SOURCE_DIR}/rs.h
 #    DESTINATION ${GR_INCLUDE_DIR}/gnuradio/fec
-#    COMPONENT "fec_devel"
 #)
 
 ########################################################################

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2013 Free Software Foundation, Inc.
+ * Copyright 2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,11 +25,14 @@
 #endif
 
 #include "histogram_sink_f_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
+
 #include <volk/volk.h>
 #include <qwt_symbol.h>
+
+#include <string.h>
 
 namespace gr {
   namespace qtgui {
@@ -52,7 +55,7 @@ namespace gr {
                                                  int nconnections,
                                                  QWidget *parent)
       : sync_block("histogram_sink_f",
-                   io_signature::make(nconnections, nconnections, sizeof(float)),
+                   io_signature::make(0, nconnections, sizeof(float)),
                    io_signature::make(0, 0, 0)),
 	d_size(size), d_bins(bins), d_xmin(xmin), d_xmax(xmax), d_name(name),
 	d_nconnections(nconnections), d_parent(parent)
@@ -69,7 +72,13 @@ namespace gr {
 
       d_index = 0;
 
-      for(int i = 0; i < d_nconnections; i++) {
+      // setup PDU handling input port
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
+                      boost::bind(&histogram_sink_f_impl::handle_pdus, this, _1));
+
+      // +1 for the PDU buffer
+      for(int i = 0; i < d_nconnections+1; i++) {
 	d_residbufs.push_back((double*)volk_malloc(d_size*sizeof(double),
                                                    volk_get_alignment()));
 	memset(d_residbufs[i], 0, d_size*sizeof(double));
@@ -89,7 +98,7 @@ namespace gr {
         d_main_gui->close();
 
       // d_main_gui is a qwidget destroyed with its parent
-      for(int i = 0; i < d_nconnections; i++) {
+      for(int i = 0; i < d_nconnections+1; i++) {
 	volk_free(d_residbufs[i]);
       }
 
@@ -109,7 +118,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -117,13 +126,10 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
-      d_main_gui = new HistogramDisplayForm(d_nconnections, d_parent);
+      int numplots = (d_nconnections > 0) ? d_nconnections : 1;
+      d_main_gui = new HistogramDisplayForm(numplots, d_parent);
       d_main_gui->setNumBins(d_bins);
       d_main_gui->setNPoints(d_size);
       d_main_gui->setXaxis(d_xmin, d_xmax);
@@ -192,37 +198,37 @@ namespace gr {
     }
 
     void
-    histogram_sink_f_impl::set_line_label(int which, const std::string &label)
+    histogram_sink_f_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    histogram_sink_f_impl::set_line_color(int which, const std::string &color)
+    histogram_sink_f_impl::set_line_color(unsigned int which, const std::string &color)
     {
       d_main_gui->setLineColor(which, color.c_str());
     }
 
     void
-    histogram_sink_f_impl::set_line_width(int which, int width)
+    histogram_sink_f_impl::set_line_width(unsigned int which, int width)
     {
       d_main_gui->setLineWidth(which, width);
     }
 
     void
-    histogram_sink_f_impl::set_line_style(int which, int style)
+    histogram_sink_f_impl::set_line_style(unsigned int which, int style)
     {
       d_main_gui->setLineStyle(which, (Qt::PenStyle)style);
     }
 
     void
-    histogram_sink_f_impl::set_line_marker(int which, int marker)
+    histogram_sink_f_impl::set_line_marker(unsigned int which, int marker)
     {
       d_main_gui->setLineMarker(which, (QwtSymbol::Style)marker);
     }
 
     void
-    histogram_sink_f_impl::set_line_alpha(int which, double alpha)
+    histogram_sink_f_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setMarkerAlpha(which, (int)(255.0*alpha));
     }
@@ -240,37 +246,37 @@ namespace gr {
     }
 
     std::string
-    histogram_sink_f_impl::line_label(int which)
+    histogram_sink_f_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     std::string
-    histogram_sink_f_impl::line_color(int which)
+    histogram_sink_f_impl::line_color(unsigned int which)
     {
       return d_main_gui->lineColor(which).toStdString();
     }
 
     int
-    histogram_sink_f_impl::line_width(int which)
+    histogram_sink_f_impl::line_width(unsigned int which)
     {
       return d_main_gui->lineWidth(which);
     }
 
     int
-    histogram_sink_f_impl::line_style(int which)
+    histogram_sink_f_impl::line_style(unsigned int which)
     {
       return d_main_gui->lineStyle(which);
     }
 
     int
-    histogram_sink_f_impl::line_marker(int which)
+    histogram_sink_f_impl::line_marker(unsigned int which)
     {
       return d_main_gui->lineMarker(which);
     }
 
     double
-    histogram_sink_f_impl::line_alpha(int which)
+    histogram_sink_f_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->markerAlpha(which))/255.0;
     }
@@ -282,7 +288,7 @@ namespace gr {
 
       if(newsize != d_size) {
 	// Resize residbuf and replace data
-	for(int i = 0; i < d_nconnections; i++) {
+	for(int i = 0; i < d_nconnections+1; i++) {
 	  volk_free(d_residbufs[i]);
 	  d_residbufs[i] = (double*)volk_malloc(newsize*sizeof(double),
                                                 volk_get_alignment());
@@ -339,6 +345,12 @@ namespace gr {
     }
 
     void
+    histogram_sink_f_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
+    }
+
+    void
     histogram_sink_f_impl::enable_autoscale(bool en)
     {
       d_main_gui->autoScale(en);
@@ -382,8 +394,8 @@ namespace gr {
 
     int
     histogram_sink_f_impl::work(int noutput_items,
-			   gr_vector_const_void_star &input_items,
-			   gr_vector_void_star &output_items)
+                                gr_vector_const_void_star &input_items,
+                                gr_vector_void_star &output_items)
     {
       int n=0, j=0, idx=0;
       const float *in = (const float*)input_items[idx];
@@ -429,6 +441,72 @@ namespace gr {
       }
 
       return j;
+    }
+
+    void
+    histogram_sink_f_impl::handle_pdus(pmt::pmt_t msg)
+    {
+      size_t len;
+      pmt::pmt_t dict, samples;
+
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("time_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
+
+      len = pmt::length(samples);
+
+      const float *in;
+      if(pmt::is_f32vector(samples)) {
+        in = (const float*)pmt::f32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("histogram_sink_f: unknown data type "
+                                 "of samples; must be float.");
+      }
+
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
+
+        npoints_resize();
+
+        // Clear the histogram
+        if(!d_main_gui->getAccumulate()) {
+          d_qApplication->postEvent(d_main_gui, new HistogramClearEvent());
+
+          // Set to accumulate over length of the current PDU
+          d_qApplication->postEvent(d_main_gui, new HistogramSetAccumulator(true));
+        }
+
+        float nplots_f = static_cast<float>(len) / static_cast<float>(d_size);
+        int nplots = static_cast<int>(ceilf(nplots_f));
+        int idx = 0;
+        for(int n = 0; n < nplots; n++) {
+          int size = std::min(d_size, (int)(len - idx));
+          volk_32f_convert_64f_u(d_residbufs[d_nconnections], &in[idx], size);
+
+          d_qApplication->postEvent(d_main_gui,
+                                    new HistogramUpdateEvent(d_residbufs, size));
+
+          idx += size;
+        }
+
+        if(!d_main_gui->getAccumulate()) {
+          // Turn accumulation off
+          d_qApplication->postEvent(d_main_gui, new HistogramSetAccumulator(false));
+        }
+      }
     }
 
   } /* namespace qtgui */

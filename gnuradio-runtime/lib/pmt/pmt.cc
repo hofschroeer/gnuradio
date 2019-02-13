@@ -63,9 +63,18 @@ pmt_base::operator delete(void *p, size_t size)
 
 #endif
 
-void intrusive_ptr_add_ref(pmt_base* p) { ++(p->count_); }
-void intrusive_ptr_release(pmt_base* p) { if (--(p->count_) == 0 ) delete p; }
+void intrusive_ptr_add_ref(pmt_base* p)
+{
+  p->refcount_.fetch_add(1, boost::memory_order_relaxed);
+}
 
+void intrusive_ptr_release(pmt_base* p) {
+  if (p->refcount_.fetch_sub(1, boost::memory_order_release) == 1) {
+    boost::atomic_thread_fence(boost::memory_order_acquire);
+    delete p;
+  }
+}
+ 
 pmt_base::~pmt_base()
 {
   // nop -- out of line virtual destructor
@@ -281,7 +290,17 @@ string_to_symbol(const std::string &name)
     if (name == _symbol(sym)->name())
       return sym;		// Yes.  Return it
   }
-
+  
+  // Lock the table on insert for thread safety:
+  static boost::mutex thread_safety;
+  boost::mutex::scoped_lock lock(thread_safety);
+  // Re-do the search in case another thread inserted this symbol into the table
+  // before we got the lock
+  for (pmt_t sym = (*get_symbol_hash_table())[hash]; sym; sym = _symbol(sym)->next()){
+    if (name == _symbol(sym)->name())
+      return sym;		// Yes.  Return it
+  }
+  
   // Nope.  Make a new one.
   pmt_t sym = pmt_t(new pmt_symbol(name));
   _symbol(sym)->set_next((*get_symbol_hash_table())[hash]);
@@ -1131,12 +1150,12 @@ equal(const pmt_t& x, const pmt_t& y)
       return false;
 
     size_t len_x, len_y;
-    if (memcmp(xv->uniform_elements(len_x),
-	       yv->uniform_elements(len_y),
-	       len_x) == 0)
+    const void *x_m = xv->uniform_elements(len_x);
+    const void *y_m = yv->uniform_elements(len_y);
+    if (memcmp(x_m, y_m, len_x) == 0)
       return true;
 
-    return true;
+    return false;
   }
 
   // FIXME add other cases here...

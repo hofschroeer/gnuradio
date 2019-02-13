@@ -24,16 +24,16 @@ GR_CHECK_HDR_N_DEF(sys/resource.h HAVE_SYS_RESOURCE_H)
 # Handle the generated constants
 ########################################################################
 execute_process(COMMAND ${PYTHON_EXECUTABLE} -c
-    "import time;print time.strftime('%a, %d %b %Y %H:%M:%S', time.gmtime())"
+    "import time;print(time.strftime('%a, %d %b %Y %H:%M:%S', time.gmtime()))"
     OUTPUT_VARIABLE BUILD_DATE OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 message(STATUS "Loading build date ${BUILD_DATE} into constants...")
 message(STATUS "Loading version ${VERSION} into constants...")
 
 #double escape for windows backslash path separators
-string(REPLACE "\\" "\\\\" prefix ${prefix})
-string(REPLACE "\\" "\\\\" SYSCONFDIR ${SYSCONFDIR})
-string(REPLACE "\\" "\\\\" GR_PREFSDIR ${GR_PREFSDIR})
+string(REPLACE "\\" "\\\\" prefix "${prefix}")
+string(REPLACE "\\" "\\\\" SYSCONFDIR "${SYSCONFDIR}")
+string(REPLACE "\\" "\\\\" GR_PREFSDIR "${GR_PREFSDIR}")
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/constants.cc.in
@@ -44,18 +44,13 @@ configure_file(
 list(APPEND gnuradio_runtime_sources ${CMAKE_CURRENT_BINARY_DIR}/constants.cc)
 
 ########################################################################
-# Include subdirs rather to populate to the sources lists.
-########################################################################
-#GR_INCLUDE_SUBDIRECTORY(foo)
-
-########################################################################
 # Setup the include and linker paths
 ########################################################################
 include_directories(${GNURADIO_RUNTIME_INCLUDE_DIRS}
                     ${CMAKE_CURRENT_SOURCE_DIR}
-		    ${CMAKE_CURRENT_BINARY_DIR}/../include/
-		    ${VOLK_INCLUDE_DIRS}
+            ${VOLK_INCLUDE_DIRS}
                     ${Boost_INCLUDE_DIRS}
+                    ${MPLIB_INCLUDE_DIRS}
 )
 
 if(ENABLE_CTRLPORT_THRIFT)
@@ -85,7 +80,6 @@ list(APPEND gnuradio_runtime_sources
   block_registry.cc
   buffer.cc
   circular_file.cc
-  complex_vec_test.cc
   feval.cc
   flat_flowgraph.cc
   flowgraph.cc
@@ -95,7 +89,6 @@ list(APPEND gnuradio_runtime_sources
   io_signature.cc
   local_sighandler.cc
   logger.cc
-  malloc16.c
   message.cc
   misc.cc
   msg_accepter.cc
@@ -106,9 +99,7 @@ list(APPEND gnuradio_runtime_sources
   realtime.cc
   realtime_impl.cc
   scheduler.cc
-  scheduler_sts.cc
   scheduler_tpb.cc
-  single_threaded_scheduler.cc
   sptr_magic.cc
   sync_block.cc
   sync_decimator.cc
@@ -129,19 +120,12 @@ list(APPEND gnuradio_runtime_sources
   ${gnuradio_ctrlport_sources}
 )
 
-# PowerPC workaround for posix_memalign
-# Might not be needed, but we'll keep it for now.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(powerpc|ppc)")
-    list(APPEND gnuradio_runtime_sources
-        ${CMAKE_CURRENT_SOURCE_DIR}/posix_memalign.cc
-    )
-endif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(powerpc|ppc)")
-
 list(APPEND gnuradio_runtime_libs
     gnuradio-pmt
     ${VOLK_LIBRARIES}
     ${Boost_LIBRARIES}
     ${LOG4CPP_LIBRARIES}
+    ${MPLIB_LIBRARIES}
 )
 
 #Add libraries for winsock2.h on Windows
@@ -149,11 +133,11 @@ CHECK_INCLUDE_FILE_CXX(windows.h HAVE_WINDOWS_H)
 IF(HAVE_WINDOWS_H)
     ADD_DEFINITIONS(-DHAVE_WINDOWS_H -DUSING_WINSOCK -DWIN32_LEAN_AND_MEAN)
     MESSAGE(STATUS "Adding windows libs to gnuradio runtime libs...")
-    LIST(APPEND gnuradio_runtime_libs WS2_32.lib WSock32.lib)
+    LIST(APPEND gnuradio_runtime_libs ws2_32 wsock32)
 ENDIF(HAVE_WINDOWS_H)
 
 #need to link with librt on ubuntu 11.10 for shm_*
-if(LINUX)
+if((LINUX) OR (CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD"))
     list(APPEND gnuradio_runtime_libs rt)
 endif()
 
@@ -203,12 +187,7 @@ endif(TRY_SHM_VMCIRCBUF)
 #######################################################
 add_library(gnuradio-runtime SHARED ${gnuradio_runtime_sources})
 target_link_libraries(gnuradio-runtime ${gnuradio_runtime_libs})
-GR_LIBRARY_FOO(gnuradio-runtime RUNTIME_COMPONENT "runtime_runtime" DEVEL_COMPONENT "runtime_devel")
-
-add_dependencies(gnuradio-runtime
-  pmt_generated runtime_generated_includes
-)
-
+GR_LIBRARY_FOO(gnuradio-runtime)
 
 #######################################################
 # STATIC LIB BUILD
@@ -241,7 +220,7 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-runtime_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "runtime_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)
 
@@ -249,40 +228,44 @@ endif(ENABLE_STATIC_LIBS)
 # Setup tests
 ########################################################################
 if(ENABLE_TESTING)
-include(GrTest)
+  include(GrTest)
 
-########################################################################
-# Append gnuradio-runtime test sources
-########################################################################
-list(APPEND test_gnuradio_runtime_sources
-  math/qa_fxpt.cc
-  math/qa_fxpt_nco.cc
-  math/qa_fxpt_vco.cc
-  math/qa_math.cc
-  math/qa_sincos.cc
-  math/qa_fast_atan2f.cc
-  qa_buffer.cc
-  qa_io_signature.cc
-  qa_circular_file.cc
-  qa_logger.cc
-  qa_vmcircbuf.cc
-  qa_runtime.cc
-)
+  # Regular runtime tests:
+  list(APPEND test_gnuradio_runtime_sources
+    qa_buffer.cc
+    qa_io_signature.cc
+    qa_circular_file.cc
+    qa_logger.cc
+    qa_vmcircbuf.cc
+  )
+  list(APPEND GR_TEST_TARGET_DEPS gnuradio-runtime gnuradio-pmt)
 
-include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/math)
-include_directories(${CPPUNIT_INCLUDE_DIRS})
-link_directories(${CPPUNIT_LIBRARY_DIRS})
+  foreach(qa_file ${test_gnuradio_runtime_sources})
+    GR_ADD_CPP_TEST("runtime_${qa_file}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/${qa_file}
+    )
+  endforeach(qa_file)
 
-add_library(test-gnuradio-runtime SHARED ${test_gnuradio_runtime_sources})
-target_link_libraries(test-gnuradio-runtime gnuradio-runtime gnuradio-pmt ${CPPUNIT_LIBRARIES} ${Boost_LIBRARIES} ${LOG4CPP_LIBRARIES})
+  # Math tests:
+  include_directories(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/math)
+  list(APPEND test_gnuradio_math_sources
+    qa_fxpt.cc
+    qa_fxpt_nco.cc
+    qa_fxpt_vco.cc
+    qa_math.cc
+    qa_sincos.cc
+    qa_fast_atan2f.cc
+  )
 
-########################################################################
-# Build the test executable
-# Set the test environment so the build libs will be found under MSVC.
-########################################################################
-list(APPEND GR_TEST_TARGET_DEPS test-gnuradio-runtime)
-add_executable(gr_runtime_test test_runtime.cc)
-target_link_libraries(gr_runtime_test test-gnuradio-runtime)
-GR_ADD_TEST(gr-runtime-test gr_runtime_test)
+  foreach(qa_file ${test_gnuradio_math_sources})
+    GR_ADD_CPP_TEST("math_${qa_file}"
+      ${CMAKE_CURRENT_SOURCE_DIR}/math/${qa_file}
+    )
+  endforeach(qa_file)
+
+  # PMT tests:
+  include_directories(${CMAKE_CURRENT_BINARY_DIR}/pmt)
+  GR_ADD_CPP_TEST("pmt_prims" ${CMAKE_CURRENT_SOURCE_DIR}/pmt/qa_pmt_prims.cc)
+  GR_ADD_CPP_TEST("pmt_unv" ${CMAKE_CURRENT_SOURCE_DIR}/pmt/qa_pmt_unv.cc)
 
 endif(ENABLE_TESTING)

@@ -24,7 +24,8 @@
 
 #include <pmt/pmt.h>
 #include <boost/utility.hpp>
-#include <boost/detail/atomic_count.hpp>
+#include <boost/version.hpp>
+#include <boost/atomic.hpp>
 
 /*
  * EVERYTHING IN THIS FILE IS PRIVATE TO THE IMPLEMENTATION!
@@ -36,10 +37,10 @@
 namespace pmt {
 
 class PMT_API pmt_base : boost::noncopyable {
-  mutable boost::detail::atomic_count count_;
+  mutable boost::atomic<int> refcount_;
 
 protected:
-  pmt_base() : count_(0) {};
+  pmt_base() : refcount_(0) {};
   virtual ~pmt_base();
 
 public:
@@ -241,9 +242,6 @@ public:
   virtual size_t itemsize() const = 0;
   virtual const std::string string_ref(size_t k) const { return std::string("not implemented"); }
 };
-
-#include "pmt_unv_int.h"
-
 } /* namespace pmt */
 
 #endif /* INCLUDED_PMT_INT_H */

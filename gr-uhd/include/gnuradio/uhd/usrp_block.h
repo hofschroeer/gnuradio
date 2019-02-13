@@ -30,6 +30,24 @@
 namespace gr {
   namespace uhd {
 
+    GR_UHD_API const pmt::pmt_t cmd_chan_key();
+    GR_UHD_API const pmt::pmt_t cmd_gain_key();
+    GR_UHD_API const pmt::pmt_t cmd_freq_key();
+    GR_UHD_API const pmt::pmt_t cmd_lo_offset_key();
+    GR_UHD_API const pmt::pmt_t cmd_tune_key();
+    GR_UHD_API const pmt::pmt_t cmd_lo_freq_key();
+    GR_UHD_API const pmt::pmt_t cmd_dsp_freq_key();
+    GR_UHD_API const pmt::pmt_t cmd_rate_key();
+    GR_UHD_API const pmt::pmt_t cmd_bandwidth_key();
+    GR_UHD_API const pmt::pmt_t cmd_time_key();
+    GR_UHD_API const pmt::pmt_t cmd_mboard_key();
+    GR_UHD_API const pmt::pmt_t cmd_antenna_key();
+    GR_UHD_API const pmt::pmt_t cmd_direction_key();
+    GR_UHD_API const pmt::pmt_t cmd_tag_key();
+
+    GR_UHD_API const pmt::pmt_t ant_direction_rx();
+    GR_UHD_API const pmt::pmt_t ant_direction_tx();
+
     /*! Base class for USRP blocks.
      * \ingroup uhd_blk
      *
@@ -45,6 +63,7 @@ namespace gr {
       usrp_block(const std::string &name,
                  gr::io_signature::sptr input_signature,
                  gr::io_signature::sptr output_signature);
+
      public:
 
       /*!
@@ -393,7 +412,7 @@ namespace gr {
       virtual ::uhd::time_spec_t get_time_now(size_t mboard = 0) = 0;
 
       /*!
-       * Get the time when the last pps pulse occured.
+       * Get the time when the last pps pulse occurred.
        * \param mboard the motherboard index 0 to M-1
        * \return the current usrp time
        */

@@ -68,7 +68,7 @@ public slots:
   void setSemilogx(bool en);
   void setSemilogy(bool en);
   void tagMenuSlot(bool en);
-  void setTagMenu(int which, bool en);
+  void setTagMenu(unsigned int which, bool en);
 
   void updateTrigger(gr::qtgui::trigger_mode mode);
   void setTriggerMode(gr::qtgui::trigger_mode mode);
@@ -106,6 +106,7 @@ signals:
   void signalTriggerLevel(float level);
   void signalTriggerDelay(float delay);
   void signalReplot();
+  void signalNPoints(const int npts);
 
 private:
   QIntValidator* d_int_validator;

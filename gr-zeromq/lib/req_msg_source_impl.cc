@@ -25,6 +25,8 @@
 #endif
 
 #include <gnuradio/io_signature.h>
+#include <boost/thread/thread.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include "req_msg_source_impl.h"
 #include "tag_headers.h"
 
@@ -42,7 +44,8 @@ namespace gr {
       : gr::block("req_msg_source",
                   gr::io_signature::make(0, 0, 0),
                   gr::io_signature::make(0, 0, 0)),
-        d_timeout(timeout)
+      d_timeout(timeout),
+      d_port(pmt::mp("out"))
     {
       int major, minor, patch;
       zmq::version(&major, &minor, &patch);
@@ -58,7 +61,7 @@ namespace gr {
       d_socket->setsockopt(ZMQ_LINGER, &time, sizeof(time));
       d_socket->connect (address);
 
-      message_port_register_out(pmt::mp("out"));
+      message_port_register_out(d_port);
     }
 
     req_msg_source_impl::~req_msg_source_impl()
@@ -87,7 +90,7 @@ namespace gr {
       while(!d_finished){
         //std::cout << "readloop\n";
 
-        zmq::pollitem_t itemsout[] = { { *d_socket, 0, ZMQ_POLLOUT, 0 } };
+        zmq::pollitem_t itemsout[] = { { static_cast<void *>(*d_socket), 0, ZMQ_POLLOUT, 0 } };
         zmq::poll(&itemsout[0], 1, d_timeout);
 
         //  If we got a reply, process
@@ -99,7 +102,7 @@ namespace gr {
           d_socket->send(request);
         }
 
-        zmq::pollitem_t items[] = { { *d_socket, 0, ZMQ_POLLIN, 0 } };
+        zmq::pollitem_t items[] = { { static_cast<void *>(*d_socket), 0, ZMQ_POLLIN, 0 } };
         zmq::poll (&items[0], 1, d_timeout);
 
         //  If we got a reply, process
@@ -111,10 +114,10 @@ namespace gr {
           std::string buf(static_cast<char*>(msg.data()), msg.size());
           std::stringbuf sb(buf);
           pmt::pmt_t m = pmt::deserialize(sb);
-          message_port_pub(pmt::mp("out"), m);
+          message_port_pub(d_port, m);
 
         } else {
-          usleep(100);
+          boost::this_thread::sleep(boost::posix_time::microseconds(100));
         }
       }
     }

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2010-2015 Free Software Foundation, Inc.
+ * Copyright 2010-2016,2018 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -29,28 +29,6 @@
 namespace gr {
   namespace uhd {
 
-    static const size_t ALL_CHANS = ::uhd::usrp::multi_usrp::ALL_CHANS;
-
-    usrp_sink::sptr
-    usrp_sink::make(const ::uhd::device_addr_t &device_addr,
-		    const ::uhd::io_type_t &io_type,
-		    size_t num_channels)
-    {
-      //fill in the streamer args
-      ::uhd::stream_args_t stream_args;
-      switch(io_type.tid) {
-      case ::uhd::io_type_t::COMPLEX_FLOAT32: stream_args.cpu_format = "fc32"; break;
-      case ::uhd::io_type_t::COMPLEX_INT16: stream_args.cpu_format = "sc16"; break;
-      default: throw std::runtime_error("only complex float and shorts known to work");
-      }
-
-      stream_args.otw_format = "sc16"; //only sc16 known to work
-      for(size_t chan = 0; chan < num_channels; chan++)
-	stream_args.channels.push_back(chan); //linear mapping
-
-      return usrp_sink::make(device_addr, stream_args, "");
-    }
-
     usrp_sink::sptr
     usrp_sink::make(const ::uhd::device_addr_t &device_addr,
                     const ::uhd::stream_args_t &stream_args,
@@ -64,29 +42,32 @@ namespace gr {
     usrp_sink_impl::usrp_sink_impl(const ::uhd::device_addr_t &device_addr,
                                    const ::uhd::stream_args_t &stream_args,
                                    const std::string &length_tag_name)
-      : usrp_block("gr uhd usrp sink",
-                      args_to_io_sig(stream_args),
-                      io_signature::make(0, 0, 0)),
+      : usrp_block("usrp_sink",
+                   args_to_io_sig(stream_args),
+                   io_signature::make(0, 0, 0)),
         usrp_block_impl(device_addr, stream_args, length_tag_name),
         _length_tag_key(length_tag_name.empty() ? pmt::PMT_NIL : pmt::string_to_symbol(length_tag_name)),
-        _nitems_to_send(0)
+        _nitems_to_send(0),
+        _async_event_loop_running(true)
     {
+      message_port_register_out(ASYNC_MSGS_PORT_KEY);
+      _async_event_thread = gr::thread::thread([this](){
+          this->async_event_loop();
+        });
       _sample_rate = get_samp_rate();
     }
 
     usrp_sink_impl::~usrp_sink_impl()
     {
+      _async_event_loop_running = false;
+      _async_event_thread.join();
     }
 
     ::uhd::dict<std::string, std::string>
     usrp_sink_impl::get_usrp_info(size_t chan)
     {
       chan = _stream_args.channels[chan];
-#ifdef UHD_USRP_MULTI_USRP_GET_USRP_INFO_API
       return _dev->get_usrp_tx_info(chan);
-#else
-      throw std::runtime_error("not implemented in this version");
-#endif
     }
 
     void
@@ -121,11 +102,7 @@ namespace gr {
     ::uhd::meta_range_t
     usrp_sink_impl::get_samp_rates(void)
     {
-#ifdef UHD_USRP_MULTI_USRP_GET_RATES_API
       return _dev->get_tx_rates(_stream_args.channels[0]);
-#else
-      throw std::runtime_error("not implemented in this version");
-#endif
     }
 
     ::uhd::tune_result_t
@@ -137,7 +114,17 @@ namespace gr {
       return _dev->set_tx_freq(tune_request, chan);
     }
 
-    SET_CENTER_FREQ_FROM_INTERNALS(usrp_sink_impl, set_tx_freq);
+    ::uhd::tune_result_t
+    usrp_sink_impl::_set_center_freq_from_internals(size_t chan, pmt::pmt_t direction)
+    {
+      _chans_to_tune.reset(chan);
+      if (pmt::eqv(direction, ant_direction_rx())) {
+        // TODO: what happens if the RX device is not instantiated? Catch error?
+        return _dev->set_rx_freq(_curr_tune_req[chan], _stream_args.channels[chan]);
+      } else {
+        return _dev->set_tx_freq(_curr_tune_req[chan], _stream_args.channels[chan]);
+      }
+    }
 
     double
     usrp_sink_impl::get_center_freq(size_t chan)
@@ -171,12 +158,16 @@ namespace gr {
 
     void usrp_sink_impl::set_normalized_gain(double norm_gain, size_t chan)
     {
+#ifdef UHD_USRP_MULTI_USRP_NORMALIZED_GAIN
+        _dev->set_normalized_tx_gain(norm_gain, chan);
+#else
       if (norm_gain > 1.0 || norm_gain < 0.0) {
         throw std::runtime_error("Normalized gain out of range, must be in [0, 1].");
       }
       ::uhd::gain_range_t gain_range = get_gain_range(chan);
       double abs_gain = (norm_gain * (gain_range.stop() - gain_range.start())) + gain_range.start();
       set_gain(abs_gain, chan);
+#endif
     }
 
     double
@@ -196,6 +187,9 @@ namespace gr {
     double
     usrp_sink_impl::get_normalized_gain(size_t chan)
     {
+#ifdef UHD_USRP_MULTI_USRP_NORMALIZED_GAIN
+        return _dev->get_normalized_tx_gain(chan);
+#else
       ::uhd::gain_range_t gain_range = get_gain_range(chan);
       double norm_gain =
         (get_gain(chan) - gain_range.start()) /
@@ -204,6 +198,7 @@ namespace gr {
       if (norm_gain > 1.0) return 1.0;
       if (norm_gain < 0.0) return 0.0;
       return norm_gain;
+#endif
     }
 
     std::vector<std::string>
@@ -270,17 +265,110 @@ namespace gr {
         chan = _stream_args.channels[chan];
         return _dev->get_tx_bandwidth_range(chan);
     }
+    std::vector<std::string>
+    usrp_sink_impl::get_lo_names(size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_names(chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    const std::string
+    usrp_sink_impl::get_lo_source(const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_source(name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    std::vector<std::string>
+    usrp_sink_impl::get_lo_sources(const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_sources(name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    void
+    usrp_sink_impl::set_lo_source(const std::string &src, const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->set_tx_lo_source(src, name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    bool
+    usrp_sink_impl::get_lo_export_enabled(const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_export_enabled(name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    void
+    usrp_sink_impl::set_lo_export_enabled(bool enabled, const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->set_tx_lo_export_enabled(enabled, name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    ::uhd::freq_range_t
+    usrp_sink_impl::get_lo_freq_range(const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_freq_range(name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    double
+    usrp_sink_impl::get_lo_freq(const std::string &name, size_t chan)
+    {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->get_tx_lo_freq(name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
+
+    double
+    usrp_sink_impl::set_lo_freq(double freq, const std::string &name, size_t chan) {
+#ifdef UHD_USRP_MULTI_USRP_TX_LO_CONFIG_API
+        chan = _stream_args.channels[chan];
+        return _dev->set_tx_lo_freq(freq, name, chan);
+#else
+        throw std::runtime_error("not implemented in this version");
+#endif
+    }
 
     void
     usrp_sink_impl::set_dc_offset(const std::complex<double> &offset,
                                   size_t chan)
     {
       chan = _stream_args.channels[chan];
-#ifdef UHD_USRP_MULTI_USRP_FRONTEND_CAL_API
       return _dev->set_tx_dc_offset(offset, chan);
-#else
-      throw std::runtime_error("not implemented in this version");
-#endif
     }
 
     void
@@ -288,11 +376,7 @@ namespace gr {
                                    size_t chan)
     {
       chan = _stream_args.channels[chan];
-#ifdef UHD_USRP_MULTI_USRP_FRONTEND_CAL_API
       return _dev->set_tx_iq_balance(correction, chan);
-#else
-      throw std::runtime_error("not implemented in this version");
-#endif
     }
 
     ::uhd::sensor_value_t
@@ -320,11 +404,9 @@ namespace gr {
     usrp_sink_impl::set_stream_args(const ::uhd::stream_args_t &stream_args)
     {
       _update_stream_args(stream_args);
-#ifdef GR_UHD_USE_STREAM_API
-      _tx_stream.reset();
-#else
-      throw std::runtime_error("not implemented in this version");
-#endif
+      if (_tx_stream) {
+        _tx_stream.reset();
+      }
     }
 
     /***********************************************************************
@@ -368,15 +450,12 @@ namespace gr {
         }
       }
 
-#ifdef GR_UHD_USE_STREAM_API
       //send all ninput_items with metadata
-      const size_t num_sent = _tx_stream->send
-        (input_items, ninput_items, _metadata, 1.0);
-#else
-      const size_t num_sent = _dev->get_device()->send
-        (input_items, ninput_items, _metadata,
-         *_type, ::uhd::device::SEND_MODE_FULL_BUFF, 1.0);
-#endif
+      boost::this_thread::disable_interruption disable_interrupt;
+      const size_t num_sent = _tx_stream->send(
+              input_items, ninput_items, _metadata, 1.0
+      );
+      boost::this_thread::restore_interruption restore_interrupt(disable_interrupt);
 
       //if using length_tags, decrement items left to send by the number of samples sent
       if(not pmt::is_null(_length_tag_key) && _nitems_to_send > 0) {
@@ -499,14 +578,14 @@ namespace gr {
           // If it's on the first sample, immediately do the tune:
           GR_LOG_DEBUG(d_debug_logger, boost::format("Received tx_freq on start of burst."));
           pmt::pmt_t freq_cmd = pmt::make_dict();
-          freq_cmd = pmt::dict_add(freq_cmd, pmt::mp("freq"), value);
+          freq_cmd = pmt::dict_add(freq_cmd, cmd_freq_key(), value);
           msg_handler_command(freq_cmd);
         }
         else if(pmt::equal(key, FREQ_KEY)) {
           // If it's not on the first sample, queue this command and only tx until here:
           GR_LOG_DEBUG(d_debug_logger, boost::format("Received tx_freq mid-burst."));
           pmt::pmt_t freq_cmd = pmt::make_dict();
-          freq_cmd = pmt::dict_add(freq_cmd, pmt::mp("freq"), value);
+          freq_cmd = pmt::dict_add(freq_cmd, cmd_freq_key(), value);
           commands_in_burst.push_back(freq_cmd);
           max_count = my_tag_count + 1;
           in_burst_cmd_offset = my_tag_count;
@@ -570,31 +649,34 @@ namespace gr {
     bool
     usrp_sink_impl::start(void)
     {
-#ifdef GR_UHD_USE_STREAM_API
-      _tx_stream = _dev->get_tx_stream(_stream_args);
-#endif
+      if (not _tx_stream)
+        _tx_stream = _dev->get_tx_stream(_stream_args);
 
       _metadata.start_of_burst = true;
       _metadata.end_of_burst = false;
       // Bursty tx will need to send a tx_time to activate time spec
       _metadata.has_time_spec = !_stream_now && pmt::is_null(_length_tag_key);
       _nitems_to_send = 0;
-      if(_start_time_set) {
-        _start_time_set = false; //cleared for next run
-        _metadata.time_spec = _start_time;
-      }
-      else {
-        _metadata.time_spec = get_time_now() + ::uhd::time_spec_t(0.15);
-      }
 
-#ifdef GR_UHD_USE_STREAM_API
+      if(pmt::is_null(_length_tag_key)){ //don't execute this part in burst mode
+        _metadata.start_of_burst = true;
+        _metadata.end_of_burst = false;
+        _metadata.has_time_spec = false;
+
+        if(!_stream_now){
+          _metadata.has_time_spec = true;
+          if(_start_time_set) {
+            _start_time_set = false; //cleared for next run
+            _metadata.time_spec = _start_time;
+          }
+          else {
+            _metadata.time_spec = get_time_now() + ::uhd::time_spec_t(0.15);
+          }
+        }
+
       _tx_stream->send
         (gr_vector_const_void_star(_nchan), 0, _metadata, 1.0);
-#else
-      _dev->get_device()->send
-        (gr_vector_const_void_star(_nchan), 0, _metadata,
-         *_type, ::uhd::device::SEND_MODE_ONE_PACKET, 1.0);
-#endif
+      }
       return true;
     }
 
@@ -608,14 +690,73 @@ namespace gr {
       _metadata.has_time_spec = false;
       _nitems_to_send = 0;
 
-#ifdef GR_UHD_USE_STREAM_API
-      _tx_stream->send(gr_vector_const_void_star(_nchan), 0, _metadata, 1.0);
-#else
-      _dev->get_device()->send
-        (gr_vector_const_void_star(_nchan), 0, _metadata,
-         *_type, ::uhd::device::SEND_MODE_ONE_PACKET, 1.0);
-#endif
+      if (_tx_stream) {
+        _tx_stream->send(gr_vector_const_void_star(_nchan), 0, _metadata, 1.0);
+      }
       return true;
+    }
+
+
+    void
+    usrp_sink_impl::setup_rpc()
+    {
+#ifdef GR_CTRLPORT
+      add_rpc_variable(
+        rpcbasic_sptr(new rpcbasic_register_handler<usrp_block>(
+          alias(), "command",
+          "", "UHD Commands",
+          RPC_PRIVLVL_MIN, DISPNULL)));
+#endif /* GR_CTRLPORT */
+    }
+
+    void
+    usrp_sink_impl::async_event_loop()
+    {
+      typedef ::uhd::async_metadata_t md_t;
+      md_t metadata;
+
+      while(_async_event_loop_running) {
+        while(!_dev->get_device()->recv_async_msg(metadata, 0.1)) {
+          if(!_async_event_loop_running){
+            return;
+          }
+        }
+
+        pmt::pmt_t event_list = pmt::PMT_NIL;
+
+        if(metadata.event_code & md_t::EVENT_CODE_BURST_ACK){
+          event_list = pmt::list_add(event_list, BURST_ACK_KEY);
+        }
+        if(metadata.event_code & md_t::EVENT_CODE_UNDERFLOW){
+          event_list = pmt::list_add(event_list, UNDERFLOW_KEY);
+        }
+        if(metadata.event_code & md_t::EVENT_CODE_UNDERFLOW_IN_PACKET){
+          event_list = pmt::list_add(event_list, UNDERFLOW_IN_PACKET_KEY);
+        }
+        if(metadata.event_code & md_t::EVENT_CODE_SEQ_ERROR){
+          event_list = pmt::list_add(event_list, SEQ_ERROR_KEY);
+        }
+        if(metadata.event_code & md_t::EVENT_CODE_SEQ_ERROR_IN_BURST){
+          event_list = pmt::list_add(event_list, SEQ_ERROR_IN_BURST_KEY);
+        }
+        if(metadata.event_code & md_t::EVENT_CODE_TIME_ERROR){
+          event_list = pmt::list_add(event_list, TIME_ERROR_KEY);
+        }
+
+        if(!pmt::eq(event_list, pmt::PMT_NIL)){
+          pmt::pmt_t value = pmt::dict_add(pmt::make_dict(), EVENT_CODE_KEY, event_list);
+          if(metadata.has_time_spec){
+            pmt::pmt_t time_spec = pmt::cons(
+              pmt::from_long(metadata.time_spec.get_full_secs()),
+              pmt::from_double(metadata.time_spec.get_frac_secs())
+            );
+            value = pmt::dict_add(value, TIME_SPEC_KEY, time_spec);
+          }
+          value = pmt::dict_add(value, CHANNEL_KEY, pmt::from_uint64(metadata.channel));
+          pmt::pmt_t msg = pmt::cons(ASYNC_MSG_KEY, value);
+          message_port_pub(ASYNC_MSGS_PORT_KEY, msg);
+        }
+      }
     }
 
   } /* namespace uhd */

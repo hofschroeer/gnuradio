@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2017 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ namespace gr {
      * \ingroup dtv
      *
      * \details
-     * Input: Variable length FEC baseband frames (BBFRAME).
+     * Input: Variable length FEC baseband frames (BBFRAME). \n
      * Output: Scrambled variable length FEC baseband frames (BBFRAME).
      */
     class DTV_API dvb_bbscrambler_bb : virtual public gr::sync_block
@@ -45,7 +45,7 @@ namespace gr {
        * \brief Create a baseband frame scrambler.
        *
        * \param standard DVB standard (DVB-S2 or DVB-T2).
-       * \param framesize FEC frame size (normal or short).
+       * \param framesize FEC frame size (normal, medium or short).
        * \param rate FEC code rate.
        */
       static sptr make(dvb_standard_t standard, dvb_framesize_t framesize, dvb_code_rate_t rate);

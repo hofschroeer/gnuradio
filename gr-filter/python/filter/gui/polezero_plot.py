@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2012 Free Software Foundation, Inc.
 #
 # This file is part of GNU Radio
@@ -336,7 +337,7 @@ class CanvasPicker(Qt.QObject):
         if(self.__selectedPoint != -1):
             xData=delete(xData, self.__selectedPoint)
             yData=delete(yData, self.__selectedPoint)
-        #one less to accomodate previous delete
+        #one less to accommodate previous delete
         if(self.__selectedcPoint != -1):
             xData=delete(xData, self.__selectedcPoint-1)
             yData=delete(yData, self.__selectedcPoint-1)

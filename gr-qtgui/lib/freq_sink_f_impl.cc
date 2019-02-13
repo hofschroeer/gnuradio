@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2014 Free Software Foundation, Inc.
+ * Copyright 2012,2014-2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,11 +25,14 @@
 #endif
 
 #include "freq_sink_f_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
+
 #include <volk/volk.h>
 #include <qwt_symbol.h>
+
+#include <string.h>
 
 namespace gr {
   namespace qtgui {
@@ -54,12 +57,15 @@ namespace gr {
 				       int nconnections,
 				       QWidget *parent)
       : sync_block("freq_sink_f",
-                   io_signature::make(nconnections, nconnections, sizeof(float)),
+                   io_signature::make(0, nconnections, sizeof(float)),
                    io_signature::make(0, 0, 0)),
 	d_fftsize(fftsize), d_fftavg(1.0),
 	d_wintype((filter::firdes::win_type)(wintype)),
 	d_center_freq(fc), d_bandwidth(bw), d_name(name),
-	d_nconnections(nconnections), d_parent(parent)
+  d_nconnections(nconnections),
+  d_port(pmt::mp("freq")),
+  d_port_bw(pmt::mp("bw")),
+  d_parent(parent)
     {
       // Required now for Qt; argc must be greater than 0 and argv
       // must have at least one valid character. Must be valid through
@@ -69,12 +75,22 @@ namespace gr {
       d_argv = new char;
       d_argv[0] = '\0';
 
+      // setup bw input port
+      message_port_register_in(d_port_bw);
+      set_msg_handler(d_port_bw,
+                      boost::bind(&freq_sink_f_impl::handle_set_bw, this, _1));      
+
       // setup output message port to post frequency when display is
       // double-clicked
-      message_port_register_out(pmt::mp("freq"));
-      message_port_register_in(pmt::mp("freq"));
-      set_msg_handler(pmt::mp("freq"),
+      message_port_register_out(d_port);
+      message_port_register_in(d_port);
+      set_msg_handler(d_port,
                       boost::bind(&freq_sink_f_impl::handle_set_freq, this, _1));
+
+      // setup PDU handling input port
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
+                      boost::bind(&freq_sink_f_impl::handle_pdus, this, _1));
 
       d_main_gui = NULL;
 
@@ -92,6 +108,7 @@ namespace gr {
                                      volk_get_alignment());
 
       d_index = 0;
+      // save the last "connection" for the PDU memory
       for(int i = 0; i < d_nconnections; i++) {
 	d_residbufs.push_back((float*)volk_malloc(d_fftsize*sizeof(float),
                                                   volk_get_alignment()));
@@ -101,6 +118,14 @@ namespace gr {
 	memset(d_residbufs[i], 0, d_fftsize*sizeof(float));
 	memset(d_magbufs[i], 0, d_fftsize*sizeof(double));
       }
+
+      d_residbufs.push_back((float*)volk_malloc(d_fftsize*sizeof(float),
+                                                volk_get_alignment()));
+      d_pdu_magbuf = (double*)volk_malloc(d_fftsize*sizeof(double),
+                                          volk_get_alignment());
+      d_magbufs.push_back(d_pdu_magbuf);
+      memset(d_residbufs[d_nconnections], 0, d_fftsize*sizeof(float));
+      memset(d_pdu_magbuf, 0, d_fftsize*sizeof(double));
 
       buildwindow();
 
@@ -114,7 +139,8 @@ namespace gr {
       if(!d_main_gui->isClosed())
         d_main_gui->close();
 
-      for(int i = 0; i < d_nconnections; i++) {
+      // +1 to handle PDU buffers; will also take care of d_pdu_magbuf
+      for(int i = 0; i < d_nconnections+1; i++) {
 	volk_free(d_residbufs[i]);
 	volk_free(d_magbufs[i]);
       }
@@ -138,7 +164,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -146,13 +172,10 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
-      d_main_gui = new FreqDisplayForm(d_nconnections, d_parent);
+      int numplots = (d_nconnections > 0) ? d_nconnections : 1;
+      d_main_gui = new FreqDisplayForm(numplots, d_parent);
       set_fft_window(d_wintype);
       set_fft_size(d_fftsize);
       set_frequency_range(d_center_freq, d_bandwidth);
@@ -249,6 +272,13 @@ namespace gr {
     }
 
     void
+    freq_sink_f_impl::set_y_label(const std::string &label,
+                                  const std::string &unit)
+    {
+        d_main_gui->setYLabel(label, unit);
+    }
+
+    void
     freq_sink_f_impl::set_update_time(double t)
     {
       //convert update time to ticks
@@ -265,37 +295,37 @@ namespace gr {
     }
 
     void
-    freq_sink_f_impl::set_line_label(int which, const std::string &label)
+    freq_sink_f_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    freq_sink_f_impl::set_line_color(int which, const std::string &color)
+    freq_sink_f_impl::set_line_color(unsigned int which, const std::string &color)
     {
       d_main_gui->setLineColor(which, color.c_str());
     }
 
     void
-    freq_sink_f_impl::set_line_width(int which, int width)
+    freq_sink_f_impl::set_line_width(unsigned int which, int width)
     {
       d_main_gui->setLineWidth(which, width);
     }
 
     void
-    freq_sink_f_impl::set_line_style(int which, int style)
+    freq_sink_f_impl::set_line_style(unsigned int which, int style)
     {
       d_main_gui->setLineStyle(which, (Qt::PenStyle)style);
     }
 
     void
-    freq_sink_f_impl::set_line_marker(int which, int marker)
+    freq_sink_f_impl::set_line_marker(unsigned int which, int marker)
     {
       d_main_gui->setLineMarker(which, (QwtSymbol::Style)marker);
     }
 
     void
-    freq_sink_f_impl::set_line_alpha(int which, double alpha)
+    freq_sink_f_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setMarkerAlpha(which, (int)(255.0*alpha));
     }
@@ -342,37 +372,37 @@ namespace gr {
     }
 
     std::string
-    freq_sink_f_impl::line_label(int which)
+    freq_sink_f_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     std::string
-    freq_sink_f_impl::line_color(int which)
+    freq_sink_f_impl::line_color(unsigned int which)
     {
       return d_main_gui->lineColor(which).toStdString();
     }
 
     int
-    freq_sink_f_impl::line_width(int which)
+    freq_sink_f_impl::line_width(unsigned int which)
     {
       return d_main_gui->lineWidth(which);
     }
 
     int
-    freq_sink_f_impl::line_style(int which)
+    freq_sink_f_impl::line_style(unsigned int which)
     {
       return d_main_gui->lineStyle(which);
     }
 
     int
-    freq_sink_f_impl::line_marker(int which)
+    freq_sink_f_impl::line_marker(unsigned int which)
     {
       return d_main_gui->lineMarker(which);
     }
 
     double
-    freq_sink_f_impl::line_alpha(int which)
+    freq_sink_f_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->markerAlpha(which))/255.0;
     }
@@ -393,6 +423,12 @@ namespace gr {
     freq_sink_f_impl::enable_autoscale(bool en)
     {
       d_main_gui->autoScale(en);
+    }
+
+    void
+    freq_sink_f_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
     }
 
     void
@@ -512,7 +548,8 @@ namespace gr {
 
       if(newfftsize != d_fftsize) {
 	// Resize residbuf and replace data
-	for(int i = 0; i < d_nconnections; i++) {
+        // +1 to handle PDU buffers
+	for(int i = 0; i < d_nconnections+1; i++) {
 	  volk_free(d_residbufs[i]);
 	  volk_free(d_magbufs[i]);
 
@@ -524,6 +561,9 @@ namespace gr {
 	  memset(d_residbufs[i], 0, newfftsize*sizeof(float));
 	  memset(d_magbufs[i], 0, newfftsize*sizeof(double));
 	}
+
+        // Update the pointer to the newly allocated memory
+        d_pdu_magbuf = d_magbufs[d_nconnections];
 
 	// Set new fft size and reset buffer index
 	// (throws away any currently held data, but who cares?)
@@ -561,8 +601,8 @@ namespace gr {
     {
       if(d_main_gui->checkClicked()) {
         double freq = d_main_gui->getClickedFreq();
-        message_port_pub(pmt::mp("freq"),
-                         pmt::cons(pmt::mp("freq"),
+        message_port_pub(d_port,
+                         pmt::cons(d_port,
                                    pmt::from_double(freq)));
       }
     }
@@ -579,6 +619,19 @@ namespace gr {
         }
       }
     }
+
+    void
+    freq_sink_f_impl::handle_set_bw(pmt::pmt_t msg)
+    {
+      if(pmt::is_pair(msg)) {
+        pmt::pmt_t x = pmt::cdr(msg);
+        if(pmt::is_real(x)) {
+          d_bandwidth = pmt::to_double(x);
+          d_qApplication->postEvent(d_main_gui,
+                                    new SetFreqEvent(d_center_freq, d_bandwidth));
+        }
+      }
+    }    
 
     void
     freq_sink_f_impl::_gui_update_trigger()
@@ -695,6 +748,88 @@ namespace gr {
       }
 
       return noutput_items;
+    }
+
+    void
+    freq_sink_f_impl::handle_pdus(pmt::pmt_t msg)
+    {
+      size_t len;
+      pmt::pmt_t dict, samples;
+
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("time_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
+
+      len = pmt::length(samples);
+
+      const float *in;
+      if(pmt::is_f32vector(samples)) {
+        in = (const float*)pmt::f32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("freq_sink_f: unknown data type "
+                                 "of samples; must be float.");
+      }
+
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
+
+        // Update the FFT size from the application
+        fftresize();
+        windowreset();
+        check_clicked();
+
+        int winoverlap = 4;
+        int fftoverlap = d_fftsize / winoverlap;
+        float num = static_cast<float>(winoverlap * len) / static_cast<float>(d_fftsize);
+        int nffts = static_cast<int>(ceilf(num));
+
+        // Clear this as we will be accumulating in the for loop over nffts
+        memset(d_pdu_magbuf, 0, sizeof(double)*d_fftsize);
+
+        size_t min = 0;
+        size_t max = std::min(d_fftsize, static_cast<int>(len));
+        for(int n = 0; n < nffts; n++) {
+          // Clear in case (max-min) < d_fftsize
+          memset(d_residbufs[d_nconnections], 0x00, sizeof(float)*d_fftsize);
+
+          // Copy in as much of the input samples as we can
+          memcpy(d_residbufs[d_nconnections], &in[min], sizeof(float)*(max-min));
+
+          // Apply the window and FFT; copy data into the PDU
+          // magnitude buffer.
+          fft(d_fbuf, d_residbufs[d_nconnections], d_fftsize);
+          for(int x = 0; x < d_fftsize; x++) {
+            d_pdu_magbuf[x] += (double)d_fbuf[x];
+          }
+
+          // Increment our indices; set max up to the number of
+          // samples in the input PDU.
+          min += fftoverlap;
+          max = std::min(max + fftoverlap, len);
+        }
+
+        // Perform the averaging
+        for(int x = 0; x < d_fftsize; x++) {
+          d_pdu_magbuf[x] /= static_cast<double>(nffts);
+        }
+
+        //update gui per-pdu
+        d_qApplication->postEvent(d_main_gui,
+                                  new FreqUpdateEvent(d_magbufs, d_fftsize));
+      }
     }
 
   } /* namespace qtgui */

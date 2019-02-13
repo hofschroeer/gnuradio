@@ -24,9 +24,13 @@
 #include "config.h"
 #endif
 
-#include "audio_registry.h"
-#include <portaudio_sink.h>
-#include <portaudio_impl.h>
+#ifdef _MSC_VER
+#include <io.h>
+#endif
+
+#include "../audio_registry.h"
+#include "portaudio_sink.h"
+#include "portaudio_impl.h"
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
 #include <stdio.h>
@@ -34,6 +38,9 @@
 #include <unistd.h>
 #include <stdexcept>
 #include <string.h>
+#ifdef _MSC_VER
+#include <io.h>
+#endif
 
 namespace gr {
   namespace audio {
@@ -73,7 +80,7 @@ namespace gr {
                 N_BUFFERS*bufsize_samples/d_output_parameters.channelCount);
       }
 
-      // FYI, the buffer indicies are in units of samples.
+      // FYI, the buffer indices are in units of samples.
       d_writer = gr::make_buffer(N_BUFFERS * bufsize_samples, sizeof(sample_t));
       d_reader = gr::buffer_add_reader(d_writer, 0);
     }
@@ -361,7 +368,7 @@ namespace gr {
     }
 
     void
-    portaudio_sink::bail(const char *msg, int err) throw (std::runtime_error)
+    portaudio_sink::bail(const char *msg, int err)
     {
       output_error_msg(msg, err);
       throw std::runtime_error("audio_portaudio_sink");

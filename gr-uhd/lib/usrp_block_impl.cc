@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2016 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -27,20 +27,6 @@ using namespace gr::uhd;
 
 const double usrp_block_impl::LOCK_TIMEOUT = 1.5;
 
-const pmt::pmt_t CMD_CHAN_KEY = pmt::mp("chan");
-const pmt::pmt_t CMD_GAIN_KEY = pmt::mp("gain");
-const pmt::pmt_t CMD_FREQ_KEY = pmt::mp("freq");
-const pmt::pmt_t CMD_LO_OFFSET_KEY = pmt::mp("lo_offset");
-const pmt::pmt_t CMD_TUNE_KEY = pmt::mp("tune");
-const pmt::pmt_t CMD_LO_FREQ_KEY = pmt::mp("lo_freq");
-const pmt::pmt_t CMD_DSP_FREQ_KEY = pmt::mp("dsp_freq");
-const pmt::pmt_t CMD_RATE_KEY = pmt::mp("rate");
-const pmt::pmt_t CMD_BANDWIDTH_KEY = pmt::mp("bandwidth");
-const pmt::pmt_t CMD_TIME_KEY = pmt::mp("time");
-const pmt::pmt_t CMD_MBOARD_KEY = pmt::mp("mboard");
-const pmt::pmt_t CMD_ANTENNA_KEY = pmt::mp("antenna");
-
-
 /**********************************************************************
  * Structors
  *********************************************************************/
@@ -51,6 +37,88 @@ usrp_block::usrp_block(
 ) : sync_block(name, input_signature, output_signature)
 {
   // nop
+}
+
+const pmt::pmt_t gr::uhd::cmd_chan_key()
+{
+  static const pmt::pmt_t val = pmt::mp("chan");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_gain_key()
+{
+  static const pmt::pmt_t val = pmt::mp("gain");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_freq_key()
+{
+  static const pmt::pmt_t val = pmt::mp("freq");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_lo_offset_key()
+{
+  static const pmt::pmt_t val = pmt::mp("lo_offset");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_tune_key()
+{
+  static const pmt::pmt_t val = pmt::mp("tune");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_lo_freq_key()
+{
+  static const pmt::pmt_t val = pmt::mp("lo_freq");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_dsp_freq_key()
+{
+  static const pmt::pmt_t val = pmt::mp("dsp_freq");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_rate_key()
+{
+  static const pmt::pmt_t val = pmt::mp("rate");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_bandwidth_key()
+{
+  static const pmt::pmt_t val = pmt::mp("bandwidth");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_time_key()
+{
+  static const pmt::pmt_t val = pmt::mp("time");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_mboard_key()
+{
+  static const pmt::pmt_t val = pmt::mp("mboard");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_antenna_key()
+{
+  static const pmt::pmt_t val = pmt::mp("antenna");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_direction_key()
+{
+  static const pmt::pmt_t val = pmt::mp("direction");
+  return val;
+}
+const pmt::pmt_t gr::uhd::cmd_tag_key()
+{
+  static const pmt::pmt_t val = pmt::mp("tag");
+  return val;
+}
+
+const pmt::pmt_t gr::uhd::ant_direction_rx()
+{
+  static const pmt::pmt_t val = pmt::mp("RX");
+  return val;
+}
+const pmt::pmt_t gr::uhd::ant_direction_tx()
+{
+  static const pmt::pmt_t val = pmt::mp("TX");
+  return val;
 }
 
 usrp_block_impl::usrp_block_impl(
@@ -64,11 +132,6 @@ usrp_block_impl::usrp_block_impl(
     _curr_tune_req(stream_args.channels.size(), ::uhd::tune_request_t()),
     _chans_to_tune(stream_args.channels.size())
 {
-  // TODO remove this when we update UHD
-  if(stream_args.cpu_format == "fc32")
-    _type = boost::make_shared< ::uhd::io_type_t >(::uhd::io_type_t::COMPLEX_FLOAT32);
-  if(stream_args.cpu_format == "sc16")
-    _type = boost::make_shared< ::uhd::io_type_t >(::uhd::io_type_t::COMPLEX_INT16);
   _dev = ::uhd::usrp::multi_usrp::make(device_addr);
 
   _check_mboard_sensors_locked();
@@ -83,15 +146,15 @@ usrp_block_impl::usrp_block_impl(
 // cuz we lazy:
 #define REGISTER_CMD_HANDLER(key, _handler) register_msg_cmd_handler(key, boost::bind(&usrp_block_impl::_handler, this, _1, _2, _3))
   // Register default command handlers:
-  REGISTER_CMD_HANDLER(CMD_FREQ_KEY, _cmd_handler_freq);
-  REGISTER_CMD_HANDLER(CMD_GAIN_KEY, _cmd_handler_gain);
-  REGISTER_CMD_HANDLER(CMD_LO_OFFSET_KEY, _cmd_handler_looffset);
-  REGISTER_CMD_HANDLER(CMD_TUNE_KEY, _cmd_handler_tune);
-  REGISTER_CMD_HANDLER(CMD_LO_FREQ_KEY, _cmd_handler_lofreq);
-  REGISTER_CMD_HANDLER(CMD_DSP_FREQ_KEY, _cmd_handler_dspfreq);
-  REGISTER_CMD_HANDLER(CMD_RATE_KEY, _cmd_handler_rate);
-  REGISTER_CMD_HANDLER(CMD_BANDWIDTH_KEY, _cmd_handler_bw);
-  REGISTER_CMD_HANDLER(CMD_ANTENNA_KEY, _cmd_handler_antenna);
+  REGISTER_CMD_HANDLER(cmd_freq_key(), _cmd_handler_freq);
+  REGISTER_CMD_HANDLER(cmd_gain_key(), _cmd_handler_gain);
+  REGISTER_CMD_HANDLER(cmd_lo_offset_key(), _cmd_handler_looffset);
+  REGISTER_CMD_HANDLER(cmd_tune_key(), _cmd_handler_tune);
+  REGISTER_CMD_HANDLER(cmd_lo_freq_key(), _cmd_handler_lofreq);
+  REGISTER_CMD_HANDLER(cmd_dsp_freq_key(), _cmd_handler_dspfreq);
+  REGISTER_CMD_HANDLER(cmd_rate_key(), _cmd_handler_rate);
+  REGISTER_CMD_HANDLER(cmd_bandwidth_key(), _cmd_handler_bw);
+  REGISTER_CMD_HANDLER(cmd_antenna_key(), _cmd_handler_antenna);
 }
 
 usrp_block_impl::~usrp_block_impl()
@@ -128,7 +191,7 @@ bool usrp_block_impl::_wait_for_locked_sensor(
 
   while (true) {
     if ((not first_lock_time.is_not_a_date_time()) and
-        (boost::get_system_time() > (first_lock_time + boost::posix_time::seconds(LOCK_TIMEOUT)))) {
+        (boost::get_system_time() > (first_lock_time + boost::posix_time::seconds(static_cast<long>(LOCK_TIMEOUT))))) {
       break;
     }
 
@@ -139,7 +202,7 @@ bool usrp_block_impl::_wait_for_locked_sensor(
     else {
       first_lock_time = boost::system_time(); //reset to 'not a date time'
 
-      if (boost::get_system_time() > (start + boost::posix_time::seconds(LOCK_TIMEOUT))){
+      if (boost::get_system_time() > (start + boost::posix_time::seconds(static_cast<long>(LOCK_TIMEOUT)))) {
         return false;
       }
     }
@@ -209,11 +272,11 @@ bool usrp_block_impl::_check_mboard_sensors_locked()
 }
 
 void
-usrp_block_impl::_set_center_freq_from_internals_allchans()
+usrp_block_impl::_set_center_freq_from_internals_allchans(pmt::pmt_t direction)
 {
   while (_chans_to_tune.any()) {
     // This resets() bits, so this loop should not run indefinitely
-    _set_center_freq_from_internals(_chans_to_tune.find_first());
+    _set_center_freq_from_internals(_chans_to_tune.find_first(), direction);
   }
 }
 
@@ -245,62 +308,38 @@ void
 usrp_block_impl::set_time_source(const std::string &source,
                                 const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->set_time_source(source, mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 std::string
 usrp_block_impl::get_time_source(const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->get_time_source(mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 std::vector<std::string>
 usrp_block_impl::get_time_sources(const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->get_time_sources(mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 void
 usrp_block_impl::set_clock_source(const std::string &source,
                                  const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->set_clock_source(source, mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 std::string
 usrp_block_impl::get_clock_source(const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->get_clock_source(mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 std::vector<std::string>
 usrp_block_impl::get_clock_sources(const size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_REF_SOURCES_API
   return _dev->get_clock_sources(mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 double
@@ -373,21 +412,13 @@ void
 usrp_block_impl::set_command_time(const ::uhd::time_spec_t &time_spec,
                                  size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_COMMAND_TIME_API
   return _dev->set_command_time(time_spec, mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 void
 usrp_block_impl::clear_command_time(size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_COMMAND_TIME_API
   return _dev->clear_command_time(mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 void
@@ -395,11 +426,7 @@ usrp_block_impl::set_user_register(const uint8_t addr,
                                     const uint32_t data,
                                     size_t mboard)
 {
-#ifdef UHD_USRP_MULTI_USRP_USER_REGS_API
   _dev->set_user_register(addr, data, mboard);
-#else
-  throw std::runtime_error("not implemented in this version");
-#endif
 }
 
 void
@@ -470,7 +497,7 @@ void usrp_block_impl::msg_handler_command(pmt::pmt_t msg)
     pmt::pmt_t new_msg = pmt::make_dict();
     new_msg = pmt::dict_add(new_msg, pmt::tuple_ref(msg, 0), pmt::tuple_ref(msg, 1));
     if (pmt::length(msg) == 3) {
-      new_msg = pmt::dict_add(new_msg, pmt::mp("chan"), pmt::tuple_ref(msg, 2));
+      new_msg = pmt::dict_add(new_msg, cmd_chan_key(), pmt::tuple_ref(msg, 2));
     }
     GR_LOG_WARN(d_debug_logger, boost::format("Using legacy message format (tuples): %s") % msg);
     return msg_handler_command(new_msg);
@@ -495,14 +522,14 @@ void usrp_block_impl::msg_handler_command(pmt::pmt_t msg)
 
   /*** Start the actual message processing *************************/
   /// 1) Check if there's a time stamp
-  if (pmt::dict_has_key(msg, CMD_TIME_KEY)) {
+  if (pmt::dict_has_key(msg, cmd_time_key())) {
     size_t mboard_index = pmt::to_long(
         pmt::dict_ref(
-          msg, CMD_MBOARD_KEY,
+          msg, cmd_mboard_key(),
           pmt::from_long( ::uhd::usrp::multi_usrp::ALL_MBOARDS ) // Default to all mboards
         )
     );
-    pmt::pmt_t timespec_p = pmt::dict_ref(msg, CMD_TIME_KEY, pmt::PMT_NIL);
+    pmt::pmt_t timespec_p = pmt::dict_ref(msg, cmd_time_key(), pmt::PMT_NIL);
     if (timespec_p == pmt::PMT_NIL) {
       clear_command_time(mboard_index);
     } else {
@@ -518,7 +545,7 @@ void usrp_block_impl::msg_handler_command(pmt::pmt_t msg)
   /// 2) Read chan value
   int chan = int(pmt::to_long(
       pmt::dict_ref(
-        msg, CMD_CHAN_KEY,
+        msg, cmd_chan_key(),
         pmt::from_long(-1) // Default to all chans
       )
   ));
@@ -539,8 +566,14 @@ void usrp_block_impl::msg_handler_command(pmt::pmt_t msg)
     }
   }
 
-  /// 4) Check if we need to re-tune
-  _set_center_freq_from_internals_allchans();
+  /// 4) See if a direction was specified
+  pmt::pmt_t direction = pmt::dict_ref(
+      msg, cmd_direction_key(),
+      pmt::PMT_NIL // Anything except "TX" or "RX will default to the messaged block direction"
+  );
+
+  /// 5) Check if we need to re-tune
+  _set_center_freq_from_internals_allchans(direction);
 }
 
 
@@ -581,8 +614,8 @@ void usrp_block_impl::_cmd_handler_freq(const pmt::pmt_t &freq_, int chan, const
 {
   double freq = pmt::to_double(freq_);
   ::uhd::tune_request_t new_tune_reqest(freq);
-  if (pmt::dict_has_key(msg, CMD_LO_OFFSET_KEY)) {
-    double lo_offset = pmt::to_double(pmt::dict_ref(msg, CMD_LO_OFFSET_KEY, pmt::PMT_NIL));
+  if (pmt::dict_has_key(msg, cmd_lo_offset_key())) {
+    double lo_offset = pmt::to_double(pmt::dict_ref(msg, cmd_lo_offset_key(), pmt::PMT_NIL));
     new_tune_reqest = ::uhd::tune_request_t(freq, lo_offset);
   }
 
@@ -591,7 +624,7 @@ void usrp_block_impl::_cmd_handler_freq(const pmt::pmt_t &freq_, int chan, const
 
 void usrp_block_impl::_cmd_handler_looffset(const pmt::pmt_t &lo_offset, int chan, const pmt::pmt_t &msg)
 {
-  if (pmt::dict_has_key(msg, CMD_FREQ_KEY)) {
+  if (pmt::dict_has_key(msg, cmd_freq_key())) {
     // Then it's already taken care of
     return;
   }
@@ -669,8 +702,8 @@ void usrp_block_impl::_cmd_handler_lofreq(const pmt::pmt_t &lofreq, int chan, co
 
   ::uhd::tune_request_t new_tune_request = _curr_tune_req[chan];
   new_tune_request.rf_freq = pmt::to_double(lofreq);
-  if (pmt::dict_has_key(msg, CMD_DSP_FREQ_KEY)) {
-    new_tune_request.dsp_freq = pmt::to_double(pmt::dict_ref(msg, CMD_DSP_FREQ_KEY, pmt::PMT_NIL));
+  if (pmt::dict_has_key(msg, cmd_dsp_freq_key())) {
+    new_tune_request.dsp_freq = pmt::to_double(pmt::dict_ref(msg, cmd_dsp_freq_key(), pmt::PMT_NIL));
   }
   new_tune_request.rf_freq_policy = ::uhd::tune_request_t::POLICY_MANUAL;
   new_tune_request.dsp_freq_policy = ::uhd::tune_request_t::POLICY_MANUAL;
@@ -680,7 +713,7 @@ void usrp_block_impl::_cmd_handler_lofreq(const pmt::pmt_t &lofreq, int chan, co
 
 void usrp_block_impl::_cmd_handler_dspfreq(const pmt::pmt_t &dspfreq, int chan, const pmt::pmt_t &msg)
 {
-  if (pmt::dict_has_key(msg, CMD_LO_FREQ_KEY)) {
+  if (pmt::dict_has_key(msg, cmd_lo_freq_key())) {
     // Then it's already dealt with
     return;
   }
@@ -699,4 +732,3 @@ void usrp_block_impl::_cmd_handler_dspfreq(const pmt::pmt_t &dspfreq, int chan, 
 
   _update_curr_tune_req(new_tune_request, chan);
 }
-

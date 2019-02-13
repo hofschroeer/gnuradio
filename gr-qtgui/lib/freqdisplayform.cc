@@ -20,10 +20,11 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <gnuradio/qtgui/freqdisplayform.h>
+
 #include <cmath>
 #include <QMessageBox>
 #include <QSpacerItem>
-#include <gnuradio/qtgui/freqdisplayform.h>
 #include <gnuradio/qtgui/freqcontrolpanel.h>
 #include <iostream>
 
@@ -107,24 +108,24 @@ FreqDisplayForm::FreqDisplayForm(int nplots, QWidget* parent)
 
   setTriggerMode(gr::qtgui::TRIG_MODE_FREE);
   connect(d_tr_mode_menu, SIGNAL(whichTrigger(gr::qtgui::trigger_mode)),
-	  this, SLOT(setTriggerMode(gr::qtgui::trigger_mode)));
+          this, SLOT(setTriggerMode(gr::qtgui::trigger_mode)));
   // updates trigger state by calling set level or set tag key.
   connect(d_tr_mode_menu, SIGNAL(whichTrigger(gr::qtgui::trigger_mode)),
-	  this, SLOT(updateTrigger(gr::qtgui::trigger_mode)));
+          this, SLOT(updateTrigger(gr::qtgui::trigger_mode)));
 
   setTriggerLevel(0);
   connect(d_tr_level_act, SIGNAL(whichTrigger(QString)),
-	  this, SLOT(setTriggerLevel(QString)));
+          this, SLOT(setTriggerLevel(QString)));
   connect(this, SIGNAL(signalTriggerLevel(float)),
-	  this, SLOT(setTriggerLevel(float)));
+          this, SLOT(setTriggerLevel(float)));
 
   setTriggerChannel(0);
   connect(d_tr_channel_menu, SIGNAL(whichTrigger(int)),
-	  this, SLOT(setTriggerChannel(int)));
+          this, SLOT(setTriggerChannel(int)));
 
   setTriggerTagKey(std::string(""));
   connect(d_tr_tag_key_act, SIGNAL(whichTrigger(QString)),
-	  this, SLOT(setTriggerTagKey(QString)));
+          this, SLOT(setTriggerTagKey(QString)));
 
   connect(this, SIGNAL(signalClearMaxData()),
           getPlot(), SLOT(clearMaxData()));
@@ -177,7 +178,9 @@ FreqDisplayForm::setupControlPanel()
   // Connect action items in menu to controlpanel widgets
   connect(d_grid_act, SIGNAL(triggered(bool)),
           d_controlpanel, SLOT(toggleGrid(bool)));
-  connect(d_sizemenu, SIGNAL(whichTrigger(int)),
+  connect(d_axislabelsmenu, SIGNAL(triggered(bool)),
+          d_controlpanel, SLOT(toggleAxisLabels(bool)));
+  connect(d_sizemenu, SIGNAL(whichTrigger(unsigned int)),
 	  d_controlpanel, SLOT(toggleFFTSize(int)));
   connect(d_winmenu, SIGNAL(whichTrigger(gr::filter::firdes::win_type)),
 	  d_controlpanel, SLOT(toggleFFTWindow(gr::filter::firdes::win_type)));
@@ -189,6 +192,8 @@ FreqDisplayForm::setupControlPanel()
           d_controlpanel, SLOT(toggleMaxHold(bool)));
   connect(d_minhold_act, SIGNAL(triggered(bool)),
           d_controlpanel, SLOT(toggleMinHold(bool)));
+  connect(d_avgmenu, SIGNAL(whichTrigger(float)),
+          d_controlpanel, SLOT(setFFTAverage(float)));
   connect(d_tr_mode_menu, SIGNAL(whichTrigger(gr::qtgui::trigger_mode)),
 	  d_controlpanel, SLOT(toggleTriggerMode(gr::qtgui::trigger_mode)));
   connect(this, SIGNAL(signalTriggerMode(gr::qtgui::trigger_mode)),
@@ -199,10 +204,12 @@ FreqDisplayForm::setupControlPanel()
   d_layout->addLayout(d_controlpanel, 0, 1);
 
   d_controlpanel->toggleGrid(d_grid_act->isChecked());
+  d_controlpanel->toggleAxisLabels(d_axislabelsmenu->isChecked());
   d_controlpanelmenu->setChecked(true);
   d_controlpanel->toggleTriggerMode(getTriggerMode());
   d_controlpanel->toggleMaxHold(d_maxhold_act->isChecked());
   d_controlpanel->toggleMinHold(d_minhold_act->isChecked());
+  d_controlpanel->setFFTAverage(getFFTAverage());
 
   emit signalFFTSize(getFFTSize());
   emit signalFFTWindow(getFFTWindowType());
@@ -321,6 +328,12 @@ void
 FreqDisplayForm::setYaxis(double min, double max)
 {
   getPlot()->setYaxis(min, max);
+}
+
+void FreqDisplayForm::setYLabel(const std::string &label,
+                                const std::string &unit)
+{
+  getPlot()->setYLabel(label, unit);
 }
 
 void
@@ -523,7 +536,7 @@ FreqDisplayForm::getTriggerTagKey() const
 
 
 /********************************************************************
- * Notifcation messages from the control panel
+ * Notification messages from the control panel
  *******************************************************************/
 
 

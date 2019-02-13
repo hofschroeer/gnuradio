@@ -25,6 +25,10 @@
 #include <gnuradio/rpcserver_selector.h>
 
 bool rpcmanager::make_aggregator(false);
+bool rpcmanager::booter_registered(false);
+bool rpcmanager::aggregator_registered(false);
+std::unique_ptr<rpcserver_booter_base> rpcmanager::boot;
+std::unique_ptr<rpcserver_booter_aggregator> rpcmanager::aggregator;
 
 #ifdef GR_RPCSERVER_ENABLED
 rpcmanager manager_instance;

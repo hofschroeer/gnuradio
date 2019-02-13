@@ -24,9 +24,9 @@
 #include "config.h"
 #endif
 
-#include "audio_registry.h"
-#include <jack_source.h>
-#include <jack_impl.h>
+#include "../audio_registry.h"
+#include "jack_source.h"
+#include "jack_impl.h"
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
 #include <stdio.h>
@@ -256,7 +256,7 @@ namespace gr {
     }
 
     void
-    jack_source::bail(const char *msg, int err) throw (std::runtime_error)
+    jack_source::bail(const char *msg, int err)
     {
       output_error_msg(msg, err);
       throw std::runtime_error("audio_jack_source");

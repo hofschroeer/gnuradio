@@ -59,7 +59,8 @@ namespace gr {
 	throw std::out_of_range("Gains must be non-negative");
 
       set_omega(omega);			// also sets min and max omega
-      set_relative_rate (1.0 / omega);
+      set_inverse_relative_rate (omega);
+      enable_update_rate(true);  // fixes tag propagation through variable rate block
     }
 
     clock_recovery_mm_ff_impl::~clock_recovery_mm_ff_impl()

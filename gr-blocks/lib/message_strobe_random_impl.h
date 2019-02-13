@@ -43,12 +43,14 @@ namespace gr {
       message_strobe_random_distribution_t d_dist;
       pmt::pmt_t d_msg;
       void run();
-      float next_delay();
+      long next_delay();
 
       boost::mt19937 d_rng;
       boost::shared_ptr< boost::variate_generator <boost::mt19937, boost::poisson_distribution<> > > d_variate_poisson;
       boost::shared_ptr< boost::variate_generator <boost::mt19937, boost::normal_distribution<> > > d_variate_normal;
       boost::shared_ptr< boost::variate_generator <boost::mt19937, boost::uniform_real<> > > d_variate_uniform;
+
+      const pmt::pmt_t d_port;
 
       void update_dist();
 

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2019 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,16 +22,21 @@
 #include "config.h"
 #endif
 
-#include <gnuradio/io_signature.h>
 #include "dvbt2_paprtr_cc_impl.h"
+#include <gnuradio/io_signature.h>
+#include <gnuradio/math.h>
 #include <volk/volk.h>
-#include <stdio.h>
+#include <algorithm>
+
+/* An early exit from the iteration loop is a very effective optimization */
+/* Change this line to #undef for validation testing with BBC V&V streams */
+#define EARLY_EXIT
 
 namespace gr {
   namespace dtv {
 
     dvbt2_paprtr_cc::sptr
-    dvbt2_paprtr_cc::make(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, float vclip, int iterations, int vlength)
+    dvbt2_paprtr_cc::make(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, float vclip, int iterations, unsigned int vlength)
     {
       return gnuradio::get_initial_sptr
         (new dvbt2_paprtr_cc_impl(carriermode, fftsize, pilotpattern, guardinterval, numdatasyms, paprmode, version, vclip, iterations, vlength));
@@ -40,7 +45,7 @@ namespace gr {
     /*
      * The private constructor
      */
-    dvbt2_paprtr_cc_impl::dvbt2_paprtr_cc_impl(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, float vclip, int iterations, int vlength)
+    dvbt2_paprtr_cc_impl::dvbt2_paprtr_cc_impl(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, float vclip, int iterations, unsigned int vlength)
       : gr::sync_block("dvbt2_paprtr_cc",
               gr::io_signature::make(1, 1, sizeof(gr_complex) * vlength),
               gr::io_signature::make(1, 1, sizeof(gr_complex) * vlength))
@@ -518,61 +523,65 @@ namespace gr {
       left_nulls = ((vlength - C_PS) / 2) + 1;
       right_nulls = (vlength - C_PS) / 2;
       papr_fft_size = vlength;
-      papr_fft = new fft::fft_complex(papr_fft_size, false, 1);
+      papr_fft = new (std::nothrow) fft::fft_complex(papr_fft_size, false, 1);
+      if (papr_fft == NULL) {
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for papr_fft.");
+        throw std::bad_alloc();
+      }
       ones_freq = (gr_complex*) volk_malloc(sizeof(gr_complex) * papr_fft_size, volk_get_alignment());
       if (ones_freq == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 1st volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for ones_freq.");
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       ones_time = (gr_complex*) volk_malloc(sizeof(gr_complex) * papr_fft_size, volk_get_alignment());
       if (ones_time == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 2nd volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for ones_time.");
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       c = (gr_complex*) volk_malloc(sizeof(gr_complex) * papr_fft_size, volk_get_alignment());
       if (c == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 3rd volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for c.");
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       ctemp = (gr_complex*) volk_malloc(sizeof(gr_complex) * papr_fft_size, volk_get_alignment());
       if (ctemp == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 4th volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for ctemp.");
         volk_free(c);
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       magnitude = (float*) volk_malloc(sizeof(float) * papr_fft_size, volk_get_alignment());
       if (magnitude == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 5th volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for magnitude.");
         volk_free(ctemp);
         volk_free(c);
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       r = (gr_complex*) volk_malloc(sizeof(gr_complex) * N_TR, volk_get_alignment());
       if (r == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 6th volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for r.");
         volk_free(magnitude);
         volk_free(ctemp);
         volk_free(c);
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       rNew = (gr_complex*) volk_malloc(sizeof(gr_complex) * N_TR, volk_get_alignment());
       if (rNew == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 7th volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for rNew.");
         volk_free(r);
         volk_free(magnitude);
         volk_free(ctemp);
@@ -580,11 +589,11 @@ namespace gr {
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       v = (gr_complex*) volk_malloc(sizeof(gr_complex) * N_TR, volk_get_alignment());
       if (v == NULL) {
-        fprintf(stderr, "Tone reservation PAPR 8th volk_malloc, Out of memory.\n");
+        GR_LOG_FATAL(d_logger, "Tone Reservation PAPR, cannot allocate memory for v.");
         volk_free(rNew);
         volk_free(r);
         volk_free(magnitude);
@@ -593,7 +602,7 @@ namespace gr {
         volk_free(ones_time);
         volk_free(ones_freq);
         delete papr_fft;
-        exit(1);
+        throw std::bad_alloc();
       }
       num_symbols = numdatasyms + N_P2;
       set_output_multiple(num_symbols);
@@ -675,7 +684,7 @@ namespace gr {
       const gr_complex zero (0.0, 0.0);
       const float normalization = 1.0 / N_TR;
       const int L_FC = (N_FC != 0);
-      const float center = (C_PS - 1) / 2;
+      const int center = (C_PS - 1) / 2;
       const float aMax = 5.0 * N_TR * std::sqrt(10.0 / (27.0 * C_PS));
       gr_complex *dst;
       int m = 0, index, valid;
@@ -690,7 +699,7 @@ namespace gr {
             valid = FALSE;
             if (j < N_P2) {
               index = 0;
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * left_nulls);
+              std::fill_n(&ones_freq[index], left_nulls, 0);
               index = left_nulls;
               for (int n = 0; n < C_PS; n++) {
                 if (p2_carrier_map[n] == P2PAPR_CARRIER) {
@@ -700,13 +709,13 @@ namespace gr {
                   ones_freq[index++] = zero;
                 }
               }
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * right_nulls);
+              std::fill_n(&ones_freq[index], right_nulls, 0);
               papr_map = p2_papr_map;
               valid = TRUE;
             }
             else if (j == (num_symbols - L_FC) && (papr_mode == PAPR_TR || papr_mode == PAPR_BOTH)) {
               index = 0;
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * left_nulls);
+              std::fill_n(&ones_freq[index], left_nulls, 0);
               index = left_nulls;
               for (int n = 0; n < C_PS; n++) {
                 if (fc_carrier_map[n] == TRPAPR_CARRIER) {
@@ -716,13 +725,13 @@ namespace gr {
                   ones_freq[index++] = zero;
                 }
               }
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * right_nulls);
+              std::fill_n(&ones_freq[index], right_nulls, 0);
               papr_map = p2_papr_map;
               valid = TRUE;
             }
             else if (papr_mode == PAPR_TR || papr_mode == PAPR_BOTH) {
               index = 0;
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * left_nulls);
+              std::fill_n(&ones_freq[index], left_nulls, 0);
               index = left_nulls;
               for (int n = 0; n < C_PS; n++) {
                 if (data_carrier_map[n] == TRPAPR_CARRIER) {
@@ -732,7 +741,7 @@ namespace gr {
                   ones_freq[index++] = zero;
                 }
               }
-              memset(&ones_freq[index], 0, sizeof(gr_complex) * right_nulls);
+              std::fill_n(&ones_freq[index], right_nulls, 0);
               papr_map = tr_papr_map;
               valid = TRUE;
             }
@@ -743,8 +752,8 @@ namespace gr {
               papr_fft->execute();
               memcpy(ones_time, papr_fft->get_outbuf(), sizeof(gr_complex) * papr_fft_size);
               volk_32fc_s32fc_multiply_32fc(ones_time, ones_time, normalization, papr_fft_size);
-              memset(&r[0], 0, sizeof(gr_complex) * N_TR);
-              memset(&c[0], 0, sizeof(gr_complex) * papr_fft_size);
+              std::fill_n(&r[0], N_TR, 0);
+              std::fill_n(&c[0], papr_fft_size, 0);
               for (int k = 1; k <= num_iterations; k++) {
                 y = 0.0;
                 volk_32f_x2_add_32f((float*)ctemp, (float*)in, (float*)c, papr_fft_size * 2);
@@ -755,13 +764,19 @@ namespace gr {
                     m = n;
                   }
                 }
+#ifdef EARLY_EXIT
                 if (y < v_clip + 0.01) {
                   break;
                 }
+#else
+                if (y < v_clip) {
+                  break;
+                }
+#endif
                 u = (in[m] + c[m]) / y;
                 alpha = y - v_clip;
                 for (int n = 0; n < N_TR; n++) {
-                  vtemp = (-2.0 * M_PI * m * ((papr_map[n] + shift) - center)) / papr_fft_size;
+                  vtemp = (-2.0 * GR_M_PI * m * ((papr_map[n] + shift) - center)) / papr_fft_size;
                   ctemp[n] = std::exp(gr_complexd(0.0, vtemp));
                 }
                 volk_32fc_s32fc_multiply_32fc(v, ctemp, u, N_TR);

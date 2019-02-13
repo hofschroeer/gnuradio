@@ -97,7 +97,7 @@ FrequencyDisplayPlot::FrequencyDisplayPlot(int nplots, QWidget* parent)
   d_ymax = 10;
   setAxisScaleEngine(QwtPlot::yLeft, new QwtLinearScaleEngine);
   setAxisScale(QwtPlot::yLeft, d_ymin, d_ymax);
-  setAxisTitle(QwtPlot::yLeft, "Power (dB)");
+  setAxisTitle(QwtPlot::yLeft, "Relative Gain (dB)");
 
   QList<QColor> default_colors;
   default_colors << QColor(Qt::blue) << QColor(Qt::red) << QColor(Qt::green)
@@ -107,7 +107,7 @@ FrequencyDisplayPlot::FrequencyDisplayPlot(int nplots, QWidget* parent)
 
   // Create a curve for each input
   // Automatically deleted when parent is deleted
-  for(int i = 0; i < d_nplots; i++) {
+  for(unsigned int i = 0; i < d_nplots; ++i) {
     d_ydata.push_back(new double[d_numPoints]);
     memset(d_ydata[i], 0x0, d_numPoints*sizeof(double));
 
@@ -179,14 +179,14 @@ FrequencyDisplayPlot::FrequencyDisplayPlot(int nplots, QWidget* parent)
 
   d_marker_noise_floor_amplitude = new QwtPlotMarker();
   d_marker_noise_floor_amplitude->setLineStyle(QwtPlotMarker::HLine);
-  QColor d_default_marker_noise_floor_amplitude_color = Qt::darkRed;
-  setMarkerNoiseFloorAmplitudeColor(d_default_marker_noise_floor_amplitude_color);
+  QColor default_marker_noise_floor_amplitude_color = Qt::darkRed;
+  setMarkerNoiseFloorAmplitudeColor(default_marker_noise_floor_amplitude_color);
   d_marker_noise_floor_amplitude->attach(this);
 
   d_marker_cf= new QwtPlotMarker();
   d_marker_cf->setLineStyle(QwtPlotMarker::VLine);
-  QColor d_default_marker_cf_color = Qt::lightGray;
-  setMarkerCFColor(d_default_marker_cf_color);
+  QColor default_marker_cf_color = Qt::lightGray;
+  setMarkerCFColor(default_marker_cf_color);
   d_marker_cf->attach(this);
   d_marker_cf->hide();
 
@@ -247,7 +247,7 @@ FrequencyDisplayPlot::FrequencyDisplayPlot(int nplots, QWidget* parent)
 
 FrequencyDisplayPlot::~FrequencyDisplayPlot()
 {
-  for(int i = 0; i < d_nplots; i++)
+  for(unsigned int i = 0; i < d_nplots; ++i)
     delete [] d_ydata[i];
   delete[] d_max_fft_data;
   delete[] d_min_fft_data;
@@ -374,7 +374,7 @@ FrequencyDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
         d_min_fft_data = new double[d_numPoints];
         d_max_fft_data = new double[d_numPoints];
 
-        for(int i = 0; i < d_nplots; i++) {
+        for(unsigned int i = 0; i < d_nplots; ++i) {
           delete[] d_ydata[i];
           d_ydata[i] = new double[d_numPoints];
 
@@ -397,7 +397,7 @@ FrequencyDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
       }
 
       double bottom=1e20, top=-1e20;
-      for(int n = 0; n < d_nplots; n++) {
+      for(unsigned int n = 0; n < d_nplots; ++n) {
 
         memcpy(d_ydata[n], &(dataPoints[n][_in_index]), _npoints_in*sizeof(double));
 
@@ -597,6 +597,16 @@ FrequencyDisplayPlot::onPickerPointSelected6(const QPointF & p)
   //fprintf(stderr,"onPickerPointSelected %f %f %d\n", point.x(), point.y(), d_xdata_multiplier);
   point.setX(point.x() * d_xdata_multiplier);
   emit plotPointSelected(point);
+}
+
+void
+FrequencyDisplayPlot::setYLabel(const std::string &label,
+                                const std::string &unit)
+{
+  std::string l = label;
+  if(unit.length() > 0)
+    l += " (" + unit + ")";
+  setAxisTitle(QwtPlot::yLeft, QString(l.c_str()));
 }
 
 void

@@ -36,7 +36,7 @@ namespace gr {
      * \ingroup channelizers_blk
      *
      * \details
-     * This block takes in a signal stream and performs interger up-
+     * This block takes in a signal stream and performs integer up-
      * sampling (interpolation) with a polyphase filterbank. The first
      * input is the integer specifying how much to interpolate by. The
      * second input is a vector (Python list) of floating-point taps
@@ -61,15 +61,15 @@ namespace gr {
      *
      * The PFB interpolator code takes the taps generated above and
      * builds a set of filters. The set contains <EM>interp</EM>
-     * number of filters and each filter contains
-     * ceil(taps.size()/interp) number of taps. Each tap from the
+     * filters and each filter contains
+     * ceil(taps.size()/interp) taps. Each tap from the
      * filter prototype is sequentially inserted into the next
      * filter. When all of the input taps are used, the remaining
      * filters in the filterbank are filled out with 0's to make sure
      * each filter has the same number of taps.
      *
      * The theory behind this block can be found in Chapter 7.1 of the
-     * following book.
+     * following book:
      *
      *    <B><EM>f. harris, "Multirate Signal Processing for Communication
      *       Systems</EM>," Upper Saddle River, NJ: Prentice Hall,

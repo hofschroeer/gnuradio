@@ -36,6 +36,7 @@ namespace gr {
       zmq::context_t  *d_context;
       zmq::socket_t   *d_socket;
       boost::thread   *d_thread;
+      const pmt::pmt_t d_port;
 
       void readloop();
 
@@ -47,6 +48,13 @@ namespace gr {
 
       bool start();
       bool stop();
+
+      std::string last_endpoint() override {
+        char addr[256];
+        size_t addr_len = sizeof(addr);
+        d_socket->getsockopt(ZMQ_LAST_ENDPOINT, addr, &addr_len);
+        return std::string(addr, addr_len-1);
+      }
     };
 
   } // namespace zeromq

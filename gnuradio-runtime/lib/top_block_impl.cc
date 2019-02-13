@@ -26,7 +26,6 @@
 
 #include "top_block_impl.h"
 #include "flat_flowgraph.h"
-#include "scheduler_sts.h"
 #include "scheduler_tpb.h"
 #include <gnuradio/top_block.h>
 #include <gnuradio/prefs.h>
@@ -48,8 +47,7 @@ namespace gr {
     const char *name;
     scheduler_maker f;
   } scheduler_table[] = {
-    { "TPB", scheduler_tpb::make },    // first entry is default
-    { "STS", scheduler_sts::make }
+    { "TPB", scheduler_tpb::make }    // first entry is default
   };
 
   static scheduler_sptr
@@ -80,7 +78,7 @@ namespace gr {
 
   top_block_impl::top_block_impl(top_block *owner)
     : d_owner(owner), d_ffg(),
-      d_state(IDLE), d_lock_count(0)
+      d_state(IDLE), d_lock_count(0), d_retry_wait(false)
   {
   }
 
@@ -125,8 +123,12 @@ namespace gr {
   void
   top_block_impl::stop()
   {
+    gr::thread::scoped_lock lock(d_mutex);
+
     if(d_scheduler)
       d_scheduler->stop();
+
+    d_state = IDLE;
   }
 
   void
@@ -137,6 +139,11 @@ namespace gr {
       {
         gr::thread::scoped_lock lock(d_mutex);
         if (!d_lock_count) {
+          if(d_retry_wait) {
+            d_retry_wait = false;
+            continue;
+          }
+          d_state = IDLE;
           break;
         }
         d_lock_cond.wait(lock);
@@ -149,8 +156,6 @@ namespace gr {
   {
     if(d_scheduler)
       d_scheduler->wait();
-
-    d_state = IDLE;
   }
 
   // N.B. lock() and unlock() cannot be called from a flow graph
@@ -159,7 +164,8 @@ namespace gr {
   top_block_impl::lock()
   {
     gr::thread::scoped_lock lock(d_mutex);
-    stop();
+    if(d_scheduler)
+      d_scheduler->stop();
     d_lock_count++;
   }
 
@@ -177,8 +183,8 @@ namespace gr {
     if(d_lock_count > 0 || d_state == IDLE) // nothing to do
       return;
 
-    d_lock_cond.notify_all();
     restart();
+    d_lock_cond.notify_all();
   }
 
   /*
@@ -197,7 +203,7 @@ namespace gr {
 
     // Create a new scheduler to execute it
     d_scheduler = make_scheduler(d_ffg, d_max_noutput_items);
-    d_state = RUNNING;
+    d_retry_wait = true;
   }
 
   std::string

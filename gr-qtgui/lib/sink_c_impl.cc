@@ -25,10 +25,13 @@
 #endif
 
 #include "sink_c_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
+
 #include <volk/volk.h>
+
+#include <string.h>
 
 namespace gr {
   namespace qtgui {
@@ -58,12 +61,13 @@ namespace gr {
       : block("sink_c",
 		 io_signature::make(1, -1, sizeof(gr_complex)),
 		 io_signature::make(0, 0, 0)),
-	d_fftsize(fftsize),
-	d_wintype((filter::firdes::win_type)(wintype)),
-	d_center_freq(fc), d_bandwidth(bw), d_name(name),
-	d_plotfreq(plotfreq), d_plotwaterfall(plotwaterfall),
-	d_plottime(plottime), d_plotconst(plotconst),
-	d_parent(parent)
+    d_fftsize(fftsize),
+    d_wintype((filter::firdes::win_type)(wintype)),
+    d_center_freq(fc), d_bandwidth(bw), d_name(name),
+    d_port(pmt::mp("freq")),
+    d_plotfreq(plotfreq), d_plotwaterfall(plotwaterfall),
+    d_plottime(plottime), d_plotconst(plotconst),
+    d_parent(parent)
     {
       // Required now for Qt; argc must be greater than 0 and argv
       // must have at least one valid character. Must be valid through
@@ -75,9 +79,9 @@ namespace gr {
 
       // setup output message port to post frequency when display is
       // double-clicked
-      message_port_register_out(pmt::mp("freq"));
-      message_port_register_in(pmt::mp("freq"));
-      set_msg_handler(pmt::mp("freq"),
+      message_port_register_out(d_port);
+      message_port_register_in(d_port);
+      set_msg_handler(d_port,
                       boost::bind(&sink_c_impl::handle_set_freq, this, _1));
 
       d_main_gui = NULL;
@@ -130,7 +134,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -138,11 +142,7 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
       if(d_center_freq < 0) {
 	throw std::runtime_error("sink_c_impl: Received bad center frequency.\n");
@@ -332,8 +332,8 @@ namespace gr {
     {
       if(d_main_gui->checkClicked()) {
         double freq = d_main_gui->getClickedFreq();
-        message_port_pub(pmt::mp("freq"),
-                         pmt::cons(pmt::mp("freq"),
+        message_port_pub(d_port,
+                         pmt::cons(d_port,
                                    pmt::from_double(freq)));
       }
     }

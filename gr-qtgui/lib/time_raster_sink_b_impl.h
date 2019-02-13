@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2013 Free Software Foundation, Inc.
+ * Copyright 2012,2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -24,6 +24,7 @@
 #define INCLUDED_QTGUI_TIME_RASTER_SINK_B_IMPL_H
 
 #include <gnuradio/qtgui/time_raster_sink_b.h>
+
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/fft/fft.h>
 #include <gnuradio/high_res_timer.h>
@@ -60,6 +61,11 @@ namespace gr {
       gr::high_res_timer_type d_update_time;
       gr::high_res_timer_type d_last_time;
 
+      void _ncols_resize();
+
+      // Handles message input port for displaying PDU samples.
+      void handle_pdus(pmt::pmt_t msg);
+
     public:
       time_raster_sink_b_impl(double samp_rate,
 			      double rows, double cols,
@@ -83,22 +89,22 @@ namespace gr {
 
       void set_update_time(double t);
       void set_title(const std::string &title);
-      void set_line_label(int which, const std::string &label);
-      void set_line_color(int which, const std::string &color);
-      void set_line_width(int which, int width);
-      void set_line_style(int which, Qt::PenStyle style);
-      void set_line_marker(int which, QwtSymbol::Style marker);
-      void set_line_alpha(int which, double alpha);
-      void set_color_map(int which, const int color);
+      void set_line_label(unsigned int which, const std::string &label);
+      void set_line_color(unsigned int which, const std::string &color);
+      void set_line_width(unsigned int which, int width);
+      void set_line_style(unsigned int which, Qt::PenStyle style);
+      void set_line_marker(unsigned int which, QwtSymbol::Style marker);
+      void set_line_alpha(unsigned int which, double alpha);
+      void set_color_map(unsigned int which, const int color);
 
       std::string title();
-      std::string line_label(int which);
-      std::string line_color(int which);
-      int line_width(int which);
-      int line_style(int which);
-      int line_marker(int which);
-      double line_alpha(int which);
-      int color_map(int which);
+      std::string line_label(unsigned int which);
+      std::string line_color(unsigned int which);
+      int line_width(unsigned int which);
+      int line_style(unsigned int which);
+      int line_marker(unsigned int which);
+      double line_alpha(unsigned int which);
+      int color_map(unsigned int which);
 
       void set_size(int width, int height);
 
@@ -117,6 +123,7 @@ namespace gr {
       void enable_menu(bool en);
       void enable_grid(bool en);
       void enable_autoscale(bool en);
+      void enable_axis_labels(bool en);
       void reset();
 
       int work(int noutput_items,

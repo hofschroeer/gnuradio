@@ -20,6 +20,7 @@
 # Boston, MA 02110-1301, USA.
 #
 
+
 from gnuradio import gr, gr_unittest, blocks
 
 from math import sqrt, atan2
@@ -58,6 +59,16 @@ class test_type_conversions(gr_unittest.TestCase):
         src = blocks.vector_source_b(src_data)
         op = blocks.char_to_short()
         dst = blocks.vector_sink_s()
+        self.tb.connect(src, op, dst)
+        self.tb.run()
+        self.assertEqual(expected_data, dst.data())
+
+    def test_complex_to_interleaved_char(self):
+        src_data = (1+2j, 3+4j, 5+6j, 7+8j, 9+10j)
+        expected_data = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        src = blocks.vector_source_c(src_data)
+        op = blocks.complex_to_interleaved_char()
+        dst = blocks.vector_sink_b()
         self.tb.connect(src, op, dst)
         self.tb.run()
         self.assertEqual(expected_data, dst.data())

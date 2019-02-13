@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015,2016 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,27 +24,21 @@
 
 #include <gnuradio/io_signature.h>
 #include "dvbt_inner_coder_impl.h"
-#include <stdio.h>
 #include <assert.h>
 
 namespace gr {
   namespace dtv {
 
-    void
+    inline void
     dvbt_inner_coder_impl::generate_codeword(unsigned char in, int &x, int &y)
     {
       //insert input bit
       d_reg |= ((in & 0x1) << 7);
 
-      d_reg  = d_reg >> 1;
+      d_reg = d_reg >> 1;
 
-      // TODO - do this with polynoms and bitcnt
-      //generate output G1=171(OCT)
-      x = ((d_reg >> 6) ^ (d_reg >> 5) ^ (d_reg >> 4) ^ \
-                        (d_reg >> 3) ^ d_reg) & 0x1;
-      //generate output G2=133(OCT)
-      y = ((d_reg >> 6) ^ (d_reg >> 4) ^ (d_reg >> 3) ^ \
-                        (d_reg >> 1) ^ d_reg) & 0x1;
+      x = d_lookup_171[d_reg];
+      y = d_lookup_133[d_reg];
     }
 
     //TODO - do this based on puncturing matrix
@@ -55,7 +49,7 @@ namespace gr {
      * 00000c0c1c2
      */
 
-    void
+    inline void
     dvbt_inner_coder_impl::generate_punctured_code(dvb_code_rate_t coderate, unsigned char * in, unsigned char * out)
     {
       int x, y;
@@ -137,8 +131,7 @@ namespace gr {
           io_signature::make(1, 1, sizeof (unsigned char) * noutput)),
       config(constellation, hierarchy, coderate, coderate),
       d_ninput(ninput), d_noutput(noutput),
-      d_reg(0),
-      d_bitcount(0)
+      d_reg(0)
     {
       //Determine k - input of encoder
       d_k = config.d_cr_k;
@@ -147,7 +140,7 @@ namespace gr {
       //Determine m - constellation symbol size
       d_m = config.d_m;
 
-      // In order to accomodate all constalations (m=2,4,6)
+      // In order to accommodate all constalations (m=2,4,6)
       // and rates (1/2, 2/3, 3/4, 5/6, 7/8)
       // We need the following things to happen:
       // - output item size multiple of 1512bytes
@@ -161,32 +154,32 @@ namespace gr {
       // We output one byte for a symbol of m bits
       // The out/in rate in bytes is: 8n/km (Bytes)
 
-      assert(d_ninput % 1);
-      assert(d_noutput % 1512);
+      assert(d_noutput % 1512 == 0);
 
       // Set output items multiple of 4
       set_output_multiple(4);
 
       // Set relative rate out/in
-      assert((d_noutput * d_k * d_m) % (d_ninput * 8 * d_n));
-      set_relative_rate((float)(d_ninput * 8 * d_n) / (float)d_noutput * d_k * d_m);
+      assert((d_noutput * d_k * d_m) % (d_ninput * 8 * d_n) == 0);
+      set_relative_rate((uint64_t)(d_ninput * 8 * d_n),
+                        (uint64_t)(d_noutput * d_k * d_m));
 
       // calculate in and out block sizes
       d_in_bs = (d_k * d_m) / 2;
       d_out_bs = 4 * d_n;
 
       // allocate bit buffers
-      d_in_buff = new unsigned char[8 * d_in_bs];
+      d_in_buff = new (std::nothrow) unsigned char[8 * d_in_bs];
       if (d_in_buff == NULL) {
-        std::cout << "Cannot allocate memory for d_in_buff" << std::endl;
-        exit(1);
+        GR_LOG_FATAL(d_logger, "Inner Coder, cannot allocate memory for d_in_buff.");
+        throw std::bad_alloc();
       }
 
-      d_out_buff = new unsigned char[8 * d_in_bs * d_n / d_k];
+      d_out_buff = new (std::nothrow) unsigned char[8 * d_in_bs * d_n / d_k];
       if (d_out_buff == NULL) {
-        std::cout << "Cannot allocate memory for d_out_buff" << std::endl;
+        GR_LOG_FATAL(d_logger, "Inner Coder, cannot allocate memory for d_out_buff.");
         delete [] d_in_buff;
-        exit(1);
+        throw std::bad_alloc();
       }
     }
 
@@ -251,6 +244,26 @@ namespace gr {
       // Tell runtime system how many output items we produced.
       return noutput_items;
     }
+
+    const int dvbt_inner_coder_impl::d_lookup_171[128] = 
+    {0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0,
+     1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1,
+     1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1,
+     0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0,
+     1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1,
+     0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0,
+     0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0,
+     1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1};
+
+    const int dvbt_inner_coder_impl::d_lookup_133[128] =
+    {0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1,
+     1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0,
+     0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1,
+     1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0,
+     1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0,
+     0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1,
+     1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0,
+     0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1};
 
   } /* namespace dtv */
 } /* namespace gr */

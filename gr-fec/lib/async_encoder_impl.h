@@ -34,8 +34,6 @@ namespace gr {
     {
     private:
       generic_encoder::sptr d_encoder;
-      size_t d_input_item_size;
-      size_t d_output_item_size;
 
       pmt::pmt_t d_in_port;
       pmt::pmt_t d_out_port;
@@ -46,6 +44,7 @@ namespace gr {
       bool d_packed;
       bool d_rev_unpack;
       bool d_rev_pack;
+      int d_mtu;
 
       uint8_t* d_bits_in;
       uint8_t* d_bits_out;
@@ -56,7 +55,8 @@ namespace gr {
     public:
       async_encoder_impl(generic_encoder::sptr my_encoder,
                          bool packed=false,
-                         bool rev_unpack=true, bool rev_pack=true);
+                         bool rev_unpack=true, bool rev_pack=true,
+                         int mtu=1500);
       ~async_encoder_impl();
 
       int general_work(int noutput_items,

@@ -28,8 +28,8 @@ set(GR_SWIG_FLAGS -DGR_HAVE_UHD) #needed to parse uhd_swig.i
 set(GR_SWIG_INCLUDE_DIRS
     ${GR_UHD_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_SWIG_INCLUDE_DIRS}
-    ${Boost_INCLUDE_DIRS}
     ${UHD_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
 )
 
 if(ENABLE_GR_CTRLPORT)
@@ -48,12 +48,10 @@ GR_SWIG_MAKE(uhd_swig uhd_swig.i)
 GR_SWIG_INSTALL(
     TARGETS uhd_swig
     DESTINATION ${GR_PYTHON_DIR}/gnuradio/uhd
-    COMPONENT "uhd_python"
 )
 
 install(
     FILES uhd_swig.i
     ${CMAKE_CURRENT_BINARY_DIR}/uhd_swig_doc.i
     DESTINATION ${GR_INCLUDE_DIR}/gnuradio/swig
-    COMPONENT "uhd_swig"
 )

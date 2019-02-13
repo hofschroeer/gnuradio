@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2011-2013 Free Software Foundation, Inc.
+ * Copyright 2011-2013,2017 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -41,10 +41,16 @@ namespace gr {
     GR_BLOCK_GW_WORK_INTERP,
   };
 
+  //! Magic return values from general_work, \ref gr::block::WORK_CALLED_PRODUCE
+  enum block_gw_work_return_type{
+    WORK_CALLED_PRODUCE = -2,
+    WORK_DONE = -1
+  };
   enum tag_propagation_policy_t {
     TPP_DONT = 0,
     TPP_ALL_TO_ALL = 1,
-    TPP_ONE_TO_ONE = 2
+    TPP_ONE_TO_ONE = 2,
+    TPP_CUSTOM = 3
   };
 
   /*!
@@ -64,13 +70,13 @@ namespace gr {
 
     int general_work_args_noutput_items;
     std::vector<int> general_work_args_ninput_items;
-    std::vector<void *> general_work_args_input_items; //TODO this should be const void*, but swig cant int cast it right
+    std::vector<void *> general_work_args_input_items; //TODO this should be const void*, but swig can't int cast it right
     std::vector<void *> general_work_args_output_items;
     int general_work_args_return_value;
 
     int work_args_ninput_items;
     int work_args_noutput_items;
-    std::vector<void *> work_args_input_items; //TODO this should be const void*, but swig cant int cast it right
+    std::vector<void *> work_args_input_items; //TODO this should be const void*, but swig can't int cast it right
     std::vector<void *> work_args_output_items;
     int work_args_return_value;
 
@@ -143,6 +149,14 @@ namespace gr {
       return gr::block::set_output_multiple(multiple);
     }
 
+    void block__set_min_output_buffer(int port, long size) {
+      return gr::block::set_min_output_buffer(port, size);
+    }
+
+    void block__set_min_output_buffer(long size) {
+      return gr::block::set_min_output_buffer(size);
+    }
+
     int block__output_multiple(void) const {
       return gr::block::output_multiple();
     }
@@ -163,8 +177,24 @@ namespace gr {
       return gr::block::set_relative_rate(relative_rate);
     }
 
+    void block__set_inverse_relative_rate(double inverse_relative_rate) {
+      return gr::block::set_inverse_relative_rate(inverse_relative_rate);
+    }
+
+    void block__set_relative_rate(uint64_t interpolation, uint64_t decimation) {
+      return gr::block::set_relative_rate(interpolation, decimation);
+    }
+
     double block__relative_rate(void) const {
       return gr::block::relative_rate();
+    }
+
+    uint64_t block__relative_rate_i(void) const {
+      return gr::block::relative_rate_i();
+    }
+
+    uint64_t block__relative_rate_d(void) const {
+      return gr::block::relative_rate_d();
     }
 
     uint64_t block__nitems_read(unsigned int which_input) {

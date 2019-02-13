@@ -38,6 +38,8 @@ namespace gr {
       boost::thread   *d_thread;
       bool            d_finished;
 
+      const pmt::pmt_t d_port;
+
       void            readloop();
 
     public:
@@ -46,6 +48,13 @@ namespace gr {
 
       bool start();
       bool stop();
+
+      std::string last_endpoint() override {
+        char addr[256];
+        size_t addr_len = sizeof(addr);
+        d_socket->getsockopt(ZMQ_LAST_ENDPOINT, addr, &addr_len);
+        return std::string(addr, addr_len-1);
+      }
     };
 
   } // namespace zeromq

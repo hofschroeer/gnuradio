@@ -1,4 +1,4 @@
-# Copyright 2014,2015 Free Software Foundation, Inc.
+# Copyright 2014,2015,2016 Free Software Foundation, Inc.
 #
 # This file is part of GNU Radio
 #
@@ -42,6 +42,7 @@ install(FILES
     dvbt_config.h
     dvbs2_config.h
     dvbt2_config.h
+    catv_config.h
     dvb_bbheader_bb.h
     dvb_bbscrambler_bb.h
     dvb_bch_bb.h
@@ -66,6 +67,19 @@ install(FILES
     dvbt_symbol_inner_interleaver.h
     dvbt_map.h
     dvbt_reference_signals.h
+    dvbt_ofdm_sym_acquisition.h
+    dvbt_demod_reference_signals.h
+    dvbt_demap.h
+    dvbt_bit_inner_deinterleaver.h
+    dvbt_viterbi_decoder.h
+    dvbt_convolutional_deinterleaver.h
+    dvbt_reed_solomon_dec.h
+    dvbt_energy_descramble.h
+    catv_transport_framing_enc_bb.h
+    catv_reed_solomon_enc_bb.h
+    catv_randomizer_bb.h
+    catv_frame_sync_enc_bb.h
+    catv_trellis_enc_bb.h
+
     DESTINATION ${GR_INCLUDE_DIR}/gnuradio/dtv
-    COMPONENT "dtv_devel"
 )

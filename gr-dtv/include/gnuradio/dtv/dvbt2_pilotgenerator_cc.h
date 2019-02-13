@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015,2017 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ namespace gr {
      * \brief Adds pilots to T2 frames.
      * \ingroup dtv
      *
-     * Input: Frequency interleaved T2 frame.
+     * Input: Frequency interleaved T2 frame. \n
      * Output: T2 frame with pilots (in time domain).
      */
     class DTV_API dvbt2_pilotgenerator_cc : virtual public gr::block
@@ -57,7 +57,7 @@ namespace gr {
        * \param bandwidth sin(x)/x equalization bandwidth.
        * \param vlength output vector length.
        */
-      static sptr make(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, dvbt2_preamble_t preamble, dvbt2_misogroup_t misogroup, dvbt2_equalization_t equalization, dvbt2_bandwidth_t bandwidth, int vlength);
+      static sptr make(dvbt2_extended_carrier_t carriermode, dvbt2_fftsize_t fftsize, dvbt2_pilotpattern_t pilotpattern, dvb_guardinterval_t guardinterval, int numdatasyms, dvbt2_papr_t paprmode, dvbt2_version_t version, dvbt2_preamble_t preamble, dvbt2_misogroup_t misogroup, dvbt2_equalization_t equalization, dvbt2_bandwidth_t bandwidth, unsigned int vlength);
     };
 
   } // namespace dtv

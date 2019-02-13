@@ -66,7 +66,8 @@ namespace gr {
       constellation(std::vector<gr_complex> constell,
 		    std::vector<int> pre_diff_code,
 		    unsigned int rotational_symmetry,
-		    unsigned int dimensionality);
+		    unsigned int dimensionality,
+		    bool normalize_points=true);
       constellation();
       virtual ~constellation();
 
@@ -253,11 +254,13 @@ namespace gr {
        *                      coding) (order of list matches constell)
        * \param rotational_symmetry Number of rotations around unit circle that have the same representation.
        * \param dimensionality Number of dimensions to the constellation.
+       * \param normalize_points Normalize constellation points to mean(abs(points))=1 (default is true)
        */
       static sptr make(std::vector<gr_complex> constell,
 		       std::vector<int> pre_diff_code,
 		       unsigned int rotational_symmetry,
-		       unsigned int dimensionality);
+		       unsigned int dimensionality,
+		       bool normalize_points=true);
 
       unsigned int decision_maker(const gr_complex *sample);
       // void calc_metric(gr_complex *sample, float *metric, trellis_metric_type_t type);
@@ -268,7 +271,8 @@ namespace gr {
       constellation_calcdist(std::vector<gr_complex> constell,
 			     std::vector<int> pre_diff_code,
 			     unsigned int rotational_symmetry,
-			     unsigned int dimensionality);
+			     unsigned int dimensionality,
+			     bool nomalize_points=true);
     };
 
 
@@ -524,7 +528,7 @@ namespace gr {
      * \brief Digital constellation for QPSK
      * \ingroup digital
      *
-     * \details
+     * \details Constellation diagram assumes little endian format e.g. top, left means 2 not 1.
      * \verbatim
        01 | 11
        -------
@@ -626,7 +630,7 @@ namespace gr {
     /*                                                          */
     /************************************************************/
 
-    /*! 
+    /*!
      * \brief Digital constellation for natually mapped 8PSK.
      * \ingroup digital
      *
@@ -662,18 +666,18 @@ namespace gr {
     /*                                                          */
     /************************************************************/
 
-    /*! 
+    /*!
      * \brief Digital constellation for 16qam.
      * \ingroup digital
      *
      * \details
      * \verbatim
    1000   1101 | 1100   1001
-               |     
+               |
    1111   1010 | 1011   1110
        -----------------
    0100   0001 | 0000   0101
-               | 
+               |
    0011   0110 | 0111   0010
        \endverbatim
      */

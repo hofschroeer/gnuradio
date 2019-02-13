@@ -43,6 +43,7 @@ namespace gr {
       d_unaligned(0),
       d_is_unaligned(false),
       d_relative_rate (1.0),
+      d_mp_relative_rate(1.0),
       d_history(1),
       d_attr_delay(0),
       d_fixed_rate(false),
@@ -54,11 +55,13 @@ namespace gr {
       d_pc_rpc_set(false),
       d_update_rate(false),
       d_max_output_buffer(std::max(output_signature->max_streams(),1), -1),
-      d_min_output_buffer(std::max(output_signature->max_streams(),1), -1)
+      d_min_output_buffer(std::max(output_signature->max_streams(),1), -1),
+      d_pmt_done(pmt::intern("done")),
+      d_system_port(pmt::intern("system"))
   {
     global_block_registry.register_primitive(alias(), this);
-    message_port_register_in(pmt::mp("system"));
-    set_msg_handler(pmt::mp("system"), boost::bind(&block::system_handler, this, _1));
+    message_port_register_in(d_system_port);
+    set_msg_handler(d_system_port, boost::bind(&block::system_handler, this, _1));
 
     configure_default_loggers(d_logger, d_debug_logger, symbol_name());
   }
@@ -170,10 +173,39 @@ namespace gr {
   void
   block::set_relative_rate(double relative_rate)
   {
-    if(relative_rate < 0.0)
-      throw std::invalid_argument("block::set_relative_rate");
+    if(relative_rate <= 0.0)
+      throw std::invalid_argument("block::set_relative_rate: relative rate must be > 0.0");
 
     d_relative_rate = relative_rate;
+    d_mp_relative_rate = mpq_class(relative_rate);
+  }
+
+  void
+  block::set_inverse_relative_rate(double inverse_relative_rate)
+  {
+    if(inverse_relative_rate <= 0.0)
+      throw std::invalid_argument("block::set_inverse_relative_rate: inverse relative rate must be > 0.0");
+
+    mpq_class inv_rr_q(inverse_relative_rate);
+    set_relative_rate((uint64_t) inv_rr_q.get_den().get_ui(),
+                      (uint64_t) inv_rr_q.get_num().get_ui());
+  }
+
+  void
+  block::set_relative_rate(uint64_t interpolation, uint64_t decimation)
+  {
+    mpz_class interp, decim;
+    if (interpolation < 1)
+      throw std::invalid_argument("block::set_relative_rate: interpolation rate cannot be 0");
+
+    if (decimation < 1)
+      throw std::invalid_argument("block::set_relative_rate: decimation rate cannot be 0");
+
+    mpz_import(interp.get_mpz_t(), 1, 1, sizeof(interpolation), 0, 0, &interpolation);
+    mpz_import(decim.get_mpz_t(), 1, 1, sizeof(decimation), 0, 0, &decimation);
+    d_mp_relative_rate = mpq_class(interp, decim);
+    d_mp_relative_rate.canonicalize();
+    d_relative_rate = d_mp_relative_rate.get_d();
   }
 
   void
@@ -706,13 +738,27 @@ namespace gr {
   {
     //std::cout << "system_handler " << msg << "\n";
     pmt::pmt_t op = pmt::car(msg);
-    if(pmt::eqv(op, pmt::mp("done"))){
+    if(pmt::eqv(op, d_pmt_done)){
         d_finished = pmt::to_long(pmt::cdr(msg));
         global_block_registry.notify_blk(alias());
     } else {
         std::cout << "WARNING: bad message op on system port!\n";
         pmt::print(msg);
     }
+  }
+
+  void
+  block::set_log_level(std::string level)
+  {
+    logger_set_level(d_logger, level);
+  }
+
+  std::string
+  block::log_level()
+  {
+    std::string level;
+    logger_get_level(d_logger, level);
+    return level;
   }
 
   void
@@ -733,16 +779,10 @@ namespace gr {
         pmt::pmt_t target = pmt::car(currlist);
 
         pmt::pmt_t block = pmt::car(target);
-        pmt::pmt_t port = pmt::mp("system");
 
         currlist = pmt::cdr(currlist);
         basic_block_sptr blk = global_block_registry.block_lookup(block);
-        blk->post(port, pmt::cons(pmt::mp("done"), pmt::mp(true)));
-
-        //std::cout << "notify finished --> ";
-        //pmt::print(pmt::cons(block,port));
-        //std::cout << "\n";
-
+        blk->post(d_system_port, pmt::cons(d_pmt_done, pmt::mp(true)));
         }
     }
   }
@@ -750,7 +790,7 @@ namespace gr {
   bool
   block::finished()
   {
-    if((detail()->ninputs() != 0) || (detail()->noutputs() != 0))
+    if(detail()->ninputs() != 0)
       return false;
     else
       return d_finished;
@@ -840,6 +880,13 @@ namespace gr {
         DISPTIME | DISPOPTSTRIP)));
 
     d_rpc_vars.push_back(
+      rpcbasic_sptr(new rpcbasic_register_get<block, float>(
+        alias(), "avg throughput", &block::pc_throughput_avg,
+        pmt::mp(0), pmt::mp(1e9), pmt::mp(0),
+        "items/s", "Average items throughput in call to work", RPC_PRIVLVL_MIN,
+        DISPTIME | DISPOPTSTRIP)));
+
+    d_rpc_vars.push_back(
       rpcbasic_sptr(new rpcbasic_register_get<block, std::vector<float> >(
         alias(), "input \% full", &block::pc_input_buffers_full,
         pmt::make_f32vector(0,0), pmt::make_f32vector(0,1), pmt::make_f32vector(0,0),
@@ -883,10 +930,14 @@ namespace gr {
 #endif /* defined(GR_CTRLPORT) && defined(GR_PERFORMANCE_COUNTERS) */
   }
 
+  std::string block::identifier() const {
+    return d_name + "(" + std::to_string(d_unique_id) + ")";
+  }
+
   std::ostream&
   operator << (std::ostream& os, const block *m)
   {
-    os << "<block " << m->name() << " (" << m->unique_id() << ")>";
+    os << "<block " << m->identifier() << ">";
     return os;
   }
 

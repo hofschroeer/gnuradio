@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015,2016 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,6 +78,9 @@ namespace gr {
           case C9_10:
             kbch = 58192;
             break;
+          case C2_9_VLSNR:
+            kbch = 14208;
+            break;
           case C13_45:
             kbch = 18528;
             break;
@@ -152,7 +155,7 @@ namespace gr {
             break;
         }
       }
-      else {
+      else if (framesize == FECFRAME_SHORT) {
         switch (rate) {
           case C1_4:
             kbch = 3072;
@@ -205,6 +208,37 @@ namespace gr {
           case C32_45:
             kbch = 11352;
             break;
+          case C1_5_VLSNR_SF2:
+            kbch = 2512;
+            break;
+          case C11_45_VLSNR_SF2:
+            kbch = 3792;
+            break;
+          case C1_5_VLSNR:
+            kbch = 3072;
+            break;
+          case C4_15_VLSNR:
+            kbch = 4152;
+            break;
+          case C1_3_VLSNR:
+            kbch = 5232;
+            break;
+          default:
+            kbch = 0;
+            break;
+        }
+      }
+      else {
+        switch (rate) {
+          case C1_5_MEDIUM:
+            kbch = 5660;
+            break;
+          case C11_45_MEDIUM:
+            kbch = 7740;
+            break;
+          case C1_3_MEDIUM:
+            kbch = 10620;
+            break;
           default:
             kbch = 0;
             break;
@@ -234,6 +268,8 @@ namespace gr {
           sr |= 0x4000;
         }
       }
+      bb_randomize64 = (uint64_t*)&bb_randomise[0];
+
     }
 
     int
@@ -241,13 +277,13 @@ namespace gr {
                           gr_vector_const_void_star &input_items,
                           gr_vector_void_star &output_items)
     {
-      const unsigned char *in = (const unsigned char *) input_items[0];
-      unsigned char *out = (unsigned char *) output_items[0];
+      // noutput_items is multiple of kbch and kbch is always divisible by 8
+      const uint64_t *in = (const uint64_t *) input_items[0];
+      uint64_t *out = (uint64_t *) output_items[0];
 
       for (int i = 0; i < noutput_items; i += kbch) {
-        for (int j = 0; j < (int)kbch; ++j)
-        {
-          out[i + j] = in[i + j] ^ bb_randomise[j];
+        for (int j = 0; j < kbch/8; ++j) {
+          *out++ = *in++ ^ bb_randomize64[j];
         }
       }
 

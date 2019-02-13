@@ -42,6 +42,7 @@ namespace gr {
      * \li tag 'phase_est': estimate of phase offset
      * \li tag 'time_est': estimate of symbol timing offset
      * \li tag 'corr_est': the correlation value of the estimates
+     * \li tag 'amp_est': 1 over the estimated amplitude
      * \li tag 'corr_start': the start sample of the correlation and the value
      *
      * \li Optional 2nd output stream providing the advanced correlator output
@@ -51,12 +52,11 @@ namespace gr {
      * offset estimate. These estimates are passed downstream as
      * stream tags for use by follow-on synchronization blocks.
      *
-     * The sync word is provided as a set of symbols along with a
-     * baseband matched filter which we use to create the filtered and
-     * upsampled symbols that we will receive over-the-air.
+     * The sync word is provided as a set of symbols after being
+     * filtered by a baseband matched filter.
      *
      * The phase_est tag can be used by downstream blocks to adjust
-     * their phase estimatopm/correction loops, and is currently
+     * their phase estimator/correction loops, and is currently
      * implemented by the gr::digital::costas_loop_cc block.
      *
      * The time_est tag can be used to adjust the sampling timing
@@ -87,20 +87,28 @@ namespace gr {
     public:
       typedef boost::shared_ptr<corr_est_cc> sptr;
 
+      enum tm_type {
+        THRESHOLD_DYNAMIC,
+        THRESHOLD_ABSOLUTE,
+      };
+
       /*!
        * Make a block that correlates against the \p symbols vector
        * and outputs a phase and symbol timing estimate.
        *
-       * \param symbols    Set of symbols to correlate against (e.g., a
-       *                   sync word).
-       * \param sps        Samples per symbol
-       * \param mark_delay tag marking delay in samples after the
-       *                   corr_start tag
-       * \param threshold  Threshold of correlator, relative to a 100%
-       *                   correlation (1.0). Default is 0.9.
+       * \param symbols           Set of symbols to correlate against (e.g., a
+       *                          sync word).
+       * \param sps               Samples per symbol
+       * \param mark_delay        tag marking delay in samples after the
+       *                          corr_start tag
+       * \param threshold         Threshold of correlator, relative to a 100%
+       *                          correlation (1.0). Default is 0.9.
+       * \param threshold_method  Method for computing threshold.
+       *
        */
       static sptr make(const std::vector<gr_complex> &symbols,
-                       float sps, unsigned int mark_delay, float threshold=0.9);
+                       float sps, unsigned int mark_delay, float threshold=0.9,
+                       tm_type threshold_method=THRESHOLD_ABSOLUTE);
 
       virtual std::vector<gr_complex> symbols() const = 0;
       virtual void set_symbols(const std::vector<gr_complex> &symbols) = 0;

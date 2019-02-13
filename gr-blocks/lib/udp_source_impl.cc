@@ -27,6 +27,7 @@
 #include "udp_source_impl.h"
 #include <gnuradio/io_signature.h>
 #include <gnuradio/math.h>
+#include <gnuradio/prefs.h>
 #include <stdexcept>
 #include <errno.h>
 #include <stdio.h>
@@ -35,7 +36,8 @@
 namespace gr {
   namespace blocks {
 
-    const int udp_source_impl::BUF_SIZE_PAYLOADS = 50;
+    const int udp_source_impl::BUF_SIZE_PAYLOADS =
+        gr::prefs::singleton()->get_long("udp_blocks", "buf_size_payloads", 50);
 
     udp_source::sptr
     udp_source::make(size_t itemsize,
@@ -54,7 +56,7 @@ namespace gr {
                       io_signature::make(0, 0, 0),
                       io_signature::make(1, 1, itemsize)),
         d_itemsize(itemsize), d_payload_size(payload_size),
-        d_eof(eof), d_connected(false), d_residual(0), d_sent(0), d_offset(0)
+        d_eof(eof), d_connected(false), d_residual(0), d_sent(0)
     {
       // Give us some more room to play.
       d_rxbuf = new char[4*d_payload_size];
@@ -92,9 +94,6 @@ namespace gr {
 
         d_socket = new boost::asio::ip::udp::socket(d_io_service);
         d_socket->open(d_endpoint.protocol());
-
-        boost::asio::socket_base::linger loption(true, 0);
-        d_socket->set_option(loption);
 
         boost::asio::socket_base::reuse_address roption(true);
         d_socket->set_option(roption);
@@ -149,7 +148,7 @@ namespace gr {
       if(!error) {
         {
           boost::lock_guard<gr::thread::mutex> lock(d_udp_mutex);
-          if(d_eof && (bytes_transferred == 1) && (d_rxbuf[0] == 0x00)) {
+          if(d_eof && (bytes_transferred == 0)) {
             // If we are using EOF notification, test for it and don't
             // add anything to the output.
             d_residual = WORK_DONE;

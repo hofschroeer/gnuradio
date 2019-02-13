@@ -21,6 +21,7 @@
  */
 
 #include <gnuradio/qtgui/displayform.h>
+
 #include <iostream>
 #include <QPixmap>
 #include <QFileDialog>
@@ -29,6 +30,7 @@ DisplayForm::DisplayForm(int nplots, QWidget* parent)
   : QWidget(parent), d_nplots(nplots), d_system_specified_flag(false)
 {
   d_isclosed = false;
+  d_axislabels = true;
 
   // Set the initial plot size
   resize(QSize(800, 600));
@@ -53,13 +55,20 @@ DisplayForm::DisplayForm(int nplots, QWidget* parent)
           this, SLOT(setGrid(bool)));
   d_grid_state = false;
 
+  d_axislabelsmenu = new QAction("Axis Labels", this);
+  d_axislabelsmenu->setCheckable(true);
+  d_axislabelsmenu->setStatusTip(tr("Toggle Axis Labels on/off"));
+  connect(d_axislabelsmenu, SIGNAL(triggered(bool)),
+      this, SLOT(setAxisLabels(bool)));
+
   // Create a pop-up menu for manipulating the figure
   d_menu_on = true;
   d_menu = new QMenu(this);
   d_menu->addAction(d_stop_act);
   d_menu->addAction(d_grid_act);
+  d_menu->addAction(d_axislabelsmenu);
 
-  for(int i = 0; i < d_nplots; i++) {
+  for(unsigned int i = 0; i < d_nplots; ++i) {
     d_line_title_act.push_back(new LineTitleAction(i, this));
     d_line_color_menu.push_back(new LineColorMenu(i, this));
     d_line_width_menu.push_back(new LineWidthMenu(i, this));
@@ -67,32 +76,32 @@ DisplayForm::DisplayForm(int nplots, QWidget* parent)
     d_line_marker_menu.push_back(new LineMarkerMenu(i, this));
     d_marker_alpha_menu.push_back(new MarkerAlphaMenu(i, this));
 
-    connect(d_line_title_act[i], SIGNAL(whichTrigger(int, const QString&)),
-	    this, SLOT(setLineLabel(int, const QString&)));
+    connect(d_line_title_act[i], SIGNAL(whichTrigger(unsigned int, const QString&)),
+	    this, SLOT(setLineLabel(unsigned int, const QString&)));
 
     for(int j = 0; j < d_line_color_menu[i]->getNumActions(); j++) {
-      connect(d_line_color_menu[i], SIGNAL(whichTrigger(int, const QString&)),
-	      this, SLOT(setLineColor(int, const QString&)));
+      connect(d_line_color_menu[i], SIGNAL(whichTrigger(unsigned int, const QString&)),
+	      this, SLOT(setLineColor(unsigned int, const QString&)));
     }
 
     for(int j = 0; j < d_line_width_menu[i]->getNumActions(); j++) {
-      connect(d_line_width_menu[i], SIGNAL(whichTrigger(int, int)),
-	      this, SLOT(setLineWidth(int, int)));
+      connect(d_line_width_menu[i], SIGNAL(whichTrigger(unsigned int, unsigned int)),
+	      this, SLOT(setLineWidth(unsigned int, unsigned int)));
     }
 
     for(int j = 0; j < d_line_style_menu[i]->getNumActions(); j++) {
-      connect(d_line_style_menu[i], SIGNAL(whichTrigger(int, Qt::PenStyle)),
-	      this, SLOT(setLineStyle(int, Qt::PenStyle)));
+      connect(d_line_style_menu[i], SIGNAL(whichTrigger(unsigned int, Qt::PenStyle)),
+	      this, SLOT(setLineStyle(unsigned int, Qt::PenStyle)));
     }
 
     for(int j = 0; j < d_line_marker_menu[i]->getNumActions(); j++) {
-      connect(d_line_marker_menu[i], SIGNAL(whichTrigger(int, QwtSymbol::Style)),
-	      this, SLOT(setLineMarker(int, QwtSymbol::Style)));
+      connect(d_line_marker_menu[i], SIGNAL(whichTrigger(unsigned int, QwtSymbol::Style)),
+	      this, SLOT(setLineMarker(unsigned int, QwtSymbol::Style)));
     }
 
     for(int j = 0; j < d_marker_alpha_menu[i]->getNumActions(); j++) {
-      connect(d_marker_alpha_menu[i], SIGNAL(whichTrigger(int, int)),
-	      this, SLOT(setMarkerAlpha(int, int)));
+      connect(d_marker_alpha_menu[i], SIGNAL(whichTrigger(unsigned int, unsigned int)),
+	      this, SLOT(setMarkerAlpha(unsigned int, unsigned int)));
     }
 
     d_lines_menu.push_back(new QMenu(tr(""), this));
@@ -153,7 +162,7 @@ DisplayForm::mousePressEvent( QMouseEvent * e)
       d_stop_act->setText(tr("Start"));
 
     // Update the line titles if changed externally
-    for(int i = 0; i < d_nplots; i++) {
+    for(unsigned int i = 0; i < d_nplots; ++i) {
       d_lines_menu[i]->setTitle(d_display_plot->getLineLabel(i));
     }
     d_menu->exec(e->globalPos());
@@ -210,13 +219,13 @@ DisplayForm::setTitle(const QString &title)
 }
 
 void
-DisplayForm::setLineLabel(int which, const QString &label)
+DisplayForm::setLineLabel(unsigned int which, const QString &label)
 {
   d_display_plot->setLineLabel(which, label);
 }
 
 void
-DisplayForm::setLineColor(int which, const QString &color)
+DisplayForm::setLineColor(unsigned int which, const QString &color)
 {
   QColor c = QColor(color);
   d_display_plot->setLineColor(which, c);
@@ -224,28 +233,28 @@ DisplayForm::setLineColor(int which, const QString &color)
 }
 
 void
-DisplayForm::setLineWidth(int which, int width)
+DisplayForm::setLineWidth(unsigned int which, unsigned int width)
 {
   d_display_plot->setLineWidth(which, width);
   d_display_plot->replot();
 }
 
 void
-DisplayForm::setLineStyle(int which, Qt::PenStyle style)
+DisplayForm::setLineStyle(unsigned int which, Qt::PenStyle style)
 {
   d_display_plot->setLineStyle(which, style);
   d_display_plot->replot();
 }
 
 void
-DisplayForm::setLineMarker(int which, QwtSymbol::Style marker)
+DisplayForm::setLineMarker(unsigned int which, QwtSymbol::Style marker)
 {
   d_display_plot->setLineMarker(which, marker);
   d_display_plot->replot();
 }
 
 void
-DisplayForm::setMarkerAlpha(int which, int alpha)
+DisplayForm::setMarkerAlpha(unsigned int which, unsigned int alpha)
 {
   d_display_plot->setMarkerAlpha(which, alpha);
   d_display_plot->replot();
@@ -258,37 +267,37 @@ DisplayForm::title()
 }
 
 QString
-DisplayForm::lineLabel(int which)
+DisplayForm::lineLabel(unsigned int which)
 {
   return d_display_plot->getLineLabel(which);
 }
 
 QString
-DisplayForm::lineColor(int which)
+DisplayForm::lineColor(unsigned int which)
 {
   return d_display_plot->getLineColor(which).name();
 }
 
 int
-DisplayForm::lineWidth(int which)
+DisplayForm::lineWidth(unsigned int which)
 {
   return d_display_plot->getLineWidth(which);
 }
 
 Qt::PenStyle
-DisplayForm::lineStyle(int which)
+DisplayForm::lineStyle(unsigned int which)
 {
   return d_display_plot->getLineStyle(which);
 }
 
 QwtSymbol::Style
-DisplayForm::lineMarker(int which)
+DisplayForm::lineMarker(unsigned int which)
 {
   return d_display_plot->getLineMarker(which);
 }
 
 int
-DisplayForm::markerAlpha(int which)
+DisplayForm::markerAlpha(unsigned int which)
 {
   return d_display_plot->getMarkerAlpha(which);
 }
@@ -336,6 +345,14 @@ DisplayForm::setGrid(bool on)
   }
   d_grid_act->setChecked(on);
   d_display_plot->replot();
+}
+
+void
+DisplayForm::setAxisLabels(bool en)
+{
+  d_axislabels = en;
+  d_axislabelsmenu->setChecked(en);
+  getPlot()->setAxisLabels(d_axislabels);
 }
 
 void

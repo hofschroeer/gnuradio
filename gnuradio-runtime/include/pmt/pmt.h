@@ -279,7 +279,7 @@ PMT_API std::complex<double> to_complex(pmt_t z);
 //! Return true if \p x is the empty list, otherwise return false.
 PMT_API bool is_null(const pmt_t& x);
 
-//! Return true if \p obj is a pair, else false.
+//! Return true if \p obj is a pair, else false (warning: also returns true for a dict)
 PMT_API bool is_pair(const pmt_t& obj);
 
 //! Return a newly allocated pair whose car is \p x and whose cdr is \p y.
@@ -314,7 +314,7 @@ PMT_API pmt_t cadddr(pmt_t pair);
  * ------------------------------------------------------------------------
  */
 
-//! Return true if \p x is a tuple, othewise false.
+//! Return true if \p x is a tuple, otherwise false.
 PMT_API bool is_tuple(pmt_t x);
 
 PMT_API pmt_t make_tuple();
@@ -348,7 +348,7 @@ PMT_API pmt_t tuple_ref(const pmt_t &tuple, size_t k);
  * ------------------------------------------------------------------------
  */
 
-//! Return true if \p x is a vector, othewise false.
+//! Return true if \p x is a vector, otherwise false.
 PMT_API bool is_vector(pmt_t x);
 
 //! Make a vector of length \p k, with initial values set to \p fill
@@ -374,7 +374,7 @@ PMT_API void vector_fill(pmt_t vector, pmt_t fill);
  * ------------------------------------------------------------------------
  */
 
-//! Return true if \p x is a blob, othewise false.
+//! Return true if \p x is a blob, otherwise false.
 PMT_API bool is_blob(pmt_t x);
 
 /*!
@@ -575,7 +575,7 @@ PMT_API std::complex<double> *c64vector_writable_elements(pmt_t v, size_t &len);
  * ------------------------------------------------------------------------
  */
 
-//! Return true if \p obj is a dictionary
+//! Return true if \p obj is a dictionary (warning: also returns true for a pair)
 PMT_API bool is_dict(const pmt_t &obj);
 
 //! Make an empty dictionary

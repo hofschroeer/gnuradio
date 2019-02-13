@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2014 Free Software Foundation, Inc.
+ * Copyright 2012,2014-2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,10 +25,13 @@
 #endif
 
 #include "waterfall_sink_f_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
+
 #include <volk/volk.h>
+
+#include <string.h>
 #include <iostream>
 
 namespace gr {
@@ -60,6 +63,8 @@ namespace gr {
 	d_wintype((filter::firdes::win_type)(wintype)),
 	d_center_freq(fc), d_bandwidth(bw), d_name(name),
 	d_nconnections(nconnections), d_nrows(200),
+        d_port(pmt::mp("freq")),
+        d_port_bw(pmt::mp("bw")),
         d_parent(parent)
     {
       // Required now for Qt; argc must be greater than 0 and argv
@@ -104,16 +109,21 @@ namespace gr {
 
       initialize();
 
+      // setup bw input port
+      message_port_register_in(d_port_bw);
+      set_msg_handler(d_port_bw,
+                      boost::bind(&waterfall_sink_f_impl::handle_set_bw, this, _1));   
+
       // setup output message port to post frequency when display is
       // double-clicked
-      message_port_register_out(pmt::mp("freq"));
-      message_port_register_in(pmt::mp("freq"));
-      set_msg_handler(pmt::mp("freq"),
+      message_port_register_out(d_port);
+      message_port_register_in(d_port);
+      set_msg_handler(d_port,
                       boost::bind(&waterfall_sink_f_impl::handle_set_freq, this, _1));
 
       // setup PDU handling input port
-      message_port_register_in(pmt::mp("pdus"));
-      set_msg_handler(pmt::mp("pdus"),
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
                       boost::bind(&waterfall_sink_f_impl::handle_pdus, this, _1));
     }
 
@@ -154,7 +164,7 @@ namespace gr {
  	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -162,11 +172,7 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
       int numplots = (d_nconnections > 0) ? d_nconnections : 1;
       d_main_gui = new WaterfallDisplayForm(numplots, d_parent);
@@ -290,19 +296,19 @@ namespace gr {
     }
 
     void
-    waterfall_sink_f_impl::set_line_label(int which, const std::string &label)
+    waterfall_sink_f_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    waterfall_sink_f_impl::set_color_map(int which, const int color)
+    waterfall_sink_f_impl::set_color_map(unsigned int which, const int color)
     {
       d_main_gui->setColorMap(which, color);
     }
 
     void
-    waterfall_sink_f_impl::set_line_alpha(int which, double alpha)
+    waterfall_sink_f_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setAlpha(which, (int)(255.0*alpha));
     }
@@ -326,19 +332,19 @@ namespace gr {
     }
 
     std::string
-    waterfall_sink_f_impl::line_label(int which)
+    waterfall_sink_f_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     int
-    waterfall_sink_f_impl::color_map(int which)
+    waterfall_sink_f_impl::color_map(unsigned int which)
     {
       return d_main_gui->getColorMap(which);
     }
 
     double
-    waterfall_sink_f_impl::line_alpha(int which)
+    waterfall_sink_f_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->getAlpha(which))/255.0;
     }
@@ -350,13 +356,13 @@ namespace gr {
     }
 
     double
-    waterfall_sink_f_impl::min_intensity(int which)
+    waterfall_sink_f_impl::min_intensity(unsigned int which)
     {
       return d_main_gui->getMinIntensity(which);
     }
 
     double
-    waterfall_sink_f_impl::max_intensity(int which)
+    waterfall_sink_f_impl::max_intensity(unsigned int which)
     {
       return d_main_gui->getMaxIntensity(which);
     }
@@ -371,6 +377,12 @@ namespace gr {
     waterfall_sink_f_impl::enable_grid(bool en)
     {
       d_main_gui->setGrid(en);
+    }
+
+    void
+    waterfall_sink_f_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
     }
 
     void
@@ -452,13 +464,18 @@ namespace gr {
 	  memset(d_magbufs[i], 0, newfftsize*sizeof(double));
 	}
 
-        d_residbufs.push_back((float*)volk_malloc(d_fftsize*sizeof(float),
-                                                  volk_get_alignment()));
-        d_pdu_magbuf = (double*)volk_malloc(d_fftsize*sizeof(double)*d_nrows,
+        // Handle the PDU buffers separately because of the different
+        // size requirement of the pdu_magbuf.
+        volk_free(d_residbufs[d_nconnections]);
+        volk_free(d_pdu_magbuf);
+
+        d_residbufs[d_nconnections] = (float*)volk_malloc(newfftsize*sizeof(float),
+                                                          volk_get_alignment());
+        d_pdu_magbuf = (double*)volk_malloc(newfftsize*sizeof(double)*d_nrows,
                                             volk_get_alignment());
-        d_magbufs.push_back(d_pdu_magbuf);
-        memset(d_pdu_magbuf, 0, d_fftsize*sizeof(double)*d_nrows);
-        memset(d_residbufs[d_nconnections], 0, d_fftsize*sizeof(float));
+        d_magbufs[d_nconnections] = d_pdu_magbuf;
+        memset(d_residbufs[d_nconnections], 0, newfftsize*sizeof(float));
+        memset(d_pdu_magbuf, 0, newfftsize*sizeof(double)*d_nrows);
 
 	// Set new fft size and reset buffer index
 	// (throws away any currently held data, but who cares?)
@@ -476,6 +493,8 @@ namespace gr {
 	d_fbuf = (float*)volk_malloc(d_fftsize*sizeof(float),
                                      volk_get_alignment());
 	memset(d_fbuf, 0, d_fftsize*sizeof(float));
+
+        d_last_time = 0;
       }
     }
 
@@ -484,8 +503,8 @@ namespace gr {
     {
       if(d_main_gui->checkClicked()) {
         double freq = d_main_gui->getClickedFreq();
-        message_port_pub(pmt::mp("freq"),
-                         pmt::cons(pmt::mp("freq"),
+        message_port_pub(d_port,
+                         pmt::cons(d_port,
                                    pmt::from_double(freq)));
       }
     }
@@ -502,6 +521,19 @@ namespace gr {
         }
       }
     }
+
+    void
+    waterfall_sink_f_impl::handle_set_bw(pmt::pmt_t msg)
+    {
+      if(pmt::is_pair(msg)) {
+        pmt::pmt_t x = pmt::cdr(msg);
+        if(pmt::is_real(x)) {
+          d_bandwidth = pmt::to_double(x);
+          d_qApplication->postEvent(d_main_gui,
+                                    new SetFreqEvent(d_center_freq, d_bandwidth));
+        }
+      }
+    }    
 
     void
     waterfall_sink_f_impl::set_time_per_fft(double t)
@@ -569,50 +601,80 @@ namespace gr {
     void
     waterfall_sink_f_impl::handle_pdus(pmt::pmt_t msg)
     {
-      int j = 0;
-      size_t len = 0;
+      size_t len;
       size_t start = 0;
-      if(pmt::is_pair(msg)) {
-        pmt::pmt_t dict = pmt::car(msg);
-        pmt::pmt_t samples = pmt::cdr(msg);
+      pmt::pmt_t dict, samples;
 
-        len = pmt::length(samples);
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
 
         pmt::pmt_t start_key = pmt::string_to_symbol("start");
         if(pmt::dict_has_key(dict, start_key)) {
           start = pmt::to_uint64(pmt::dict_ref(dict, start_key, pmt::PMT_NIL));
         }
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("time_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
 
-        gr::high_res_timer_type ref_start = (uint64_t)start * (double)(1.0/d_bandwidth) * 1000000;
+      len = pmt::length(samples);
 
-        const float *in;
-        if(pmt::is_f32vector(samples)) {
-          in = (const float*)pmt::f32vector_elements(samples, len);
-        }
-        else {
-          throw std::runtime_error("waterfall sink: unknown data type of samples; must be float.");
-        }
+      const float *in;
+      if(pmt::is_f32vector(samples)) {
+        in = (const float*)pmt::f32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("waterfall sink: unknown data type "
+                                 "of samples; must be float.");
+      }
 
-        int stride = (len - d_fftsize)/(d_nrows-1);
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
 
-        set_time_per_fft(1.0/d_bandwidth * stride);
-        std::ostringstream title("");
-        title << "Time (+" << (uint64_t)ref_start << "us)";
-        set_time_title(title.str());
         // Update the FFT size from the application
         fftresize();
         windowreset();
         check_clicked();
 
+        gr::high_res_timer_type ref_start = (uint64_t)start * (double)(1.0/d_bandwidth) * 1000000;
+
+        int stride = std::max(0, (int)(len - d_fftsize)/(int)(d_nrows));
+
+        set_time_per_fft(1.0/d_bandwidth * stride);
+        std::ostringstream title("");
+        title << "Time (+" << (uint64_t)ref_start << "us)";
+        set_time_title(title.str());
+
+        int j = 0;
+        size_t min = 0;
+        size_t max = std::min(d_fftsize, static_cast<int>(len));
         for(size_t i=0; j < d_nrows; i+=stride) {
+          // Clear residbufs if len < d_fftsize
+          memset(d_residbufs[d_nconnections], 0x00, sizeof(float)*d_fftsize);
 
-          memcpy(d_residbufs[d_nconnections], &in[j * stride],
-                 sizeof(float)*d_fftsize);
+          // Copy in as much of the input samples as we can
+          memcpy(d_residbufs[d_nconnections], &in[min], sizeof(float)*(max-min));
 
+          // Apply the window and FFT; copy data into the PDU
+          // magnitude buffer.
           fft(d_fbuf, d_residbufs[d_nconnections], d_fftsize);
           for(int x = 0; x < d_fftsize; x++) {
             d_pdu_magbuf[j * d_fftsize + x] = (double)d_fbuf[x];
           }
+
+          // Increment our indices; set max up to the number of
+          // samples in the input PDU.
+          min += stride;
+          max = std::min(max + stride, len);
           j++;
         }
 

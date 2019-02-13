@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2004,2008-2010,2013 Free Software Foundation, Inc.
+ * Copyright 2004,2008-2010,2013,2017 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -73,14 +73,15 @@ namespace gr {
     if(min_noutput_items == 0)
       min_noutput_items = 1;
     for(int i = 0; i < d->noutputs (); i++) {
-      gr::thread::scoped_lock guard(*d->output(i)->mutex());
-      int avail_n = round_down(d->output(i)->space_available(), output_multiple);
-      int best_n = round_down(d->output(i)->bufsize()/2, output_multiple);
+      buffer_sptr out_buf = d->output(i);
+      gr::thread::scoped_lock guard(*out_buf->mutex());
+      int avail_n = round_down(out_buf->space_available(), output_multiple);
+      int best_n = round_down(out_buf->bufsize()/2, output_multiple);
       if(best_n < min_noutput_items)
         throw std::runtime_error("Buffer too small for min_noutput_items");
       int n = std::min(avail_n, best_n);
       if(n < min_noutput_items){  // We're blocked on output.
-        if(d->output(i)->done()){ // Downstream is done, therefore we're done.
+        if(out_buf->done()){ // Downstream is done, therefore we're done.
           return -1;
         }
         return 0;
@@ -93,8 +94,11 @@ namespace gr {
   static bool
   propagate_tags(block::tag_propagation_policy_t policy, block_detail *d,
                  const std::vector<uint64_t> &start_nitems_read, double rrate,
+                 mpq_class &mp_rrate, bool use_fp_rrate,
                  std::vector<tag_t> &rtags, long block_id)
   {
+    static const mpq_class one_half(1, 2);
+
     // Move tags downstream
     // if a sink, we don't need to move downstream
     if(d->sink_p()) {
@@ -103,45 +107,93 @@ namespace gr {
 
     switch(policy) {
     case block::TPP_DONT:
+    case block::TPP_CUSTOM:
       return true;
-      break;
     case block::TPP_ALL_TO_ALL:
-      // every tag on every input propogates to everyone downstream
+    {
+      // every tag on every input propagates to everyone downstream
+      std::vector<buffer_sptr> out_buf;
+
       for(int i = 0; i < d->ninputs(); i++) {
         d->get_tags_in_range(rtags, i, start_nitems_read[i],
                              d->nitems_read(i), block_id);
+
+        if (rtags.size() == 0)
+          continue;
+
+        if (out_buf.size() == 0) {
+            out_buf.reserve(d->noutputs());
+            for(int o = 0; o < d->noutputs(); o++)
+               out_buf.push_back(d->output(o));
+        }
 
         std::vector<tag_t>::iterator t;
         if(rrate == 1.0) {
           for(t = rtags.begin(); t != rtags.end(); t++) {
             for(int o = 0; o < d->noutputs(); o++)
-              d->output(o)->add_item_tag(*t);
+              out_buf[o]->add_item_tag(*t);
           }
         }
-        else {
+        else if(use_fp_rrate) {
           for(t = rtags.begin(); t != rtags.end(); t++) {
             tag_t new_tag = *t;
             new_tag.offset = ((double)new_tag.offset * rrate) + 0.5;
             for(int o = 0; o < d->noutputs(); o++)
-              d->output(o)->add_item_tag(new_tag);
+              out_buf[o]->add_item_tag(new_tag);
+          }
+        }
+        else {
+          mpz_class offset;
+          for(t = rtags.begin(); t != rtags.end(); t++) {
+            tag_t new_tag = *t;
+            mpz_import(offset.get_mpz_t(), 1, 1, sizeof(new_tag.offset), 0, 0, &new_tag.offset);
+            offset = offset * mp_rrate + one_half;
+            new_tag.offset = offset.get_ui();
+            for(int o = 0; o < d->noutputs(); o++)
+              out_buf[o]->add_item_tag(new_tag);
           }
         }
       }
+    }
       break;
     case block::TPP_ONE_TO_ONE:
       // tags from input i only go to output i
       // this requires d->ninputs() == d->noutputs; this is checked when this
       // type of tag-propagation system is selected in block_detail
       if(d->ninputs() == d->noutputs()) {
+        buffer_sptr out_buf;
+
         for(int i = 0; i < d->ninputs(); i++) {
           d->get_tags_in_range(rtags, i, start_nitems_read[i],
                                d->nitems_read(i), block_id);
 
+          if (rtags.size() == 0)
+            continue;
+
+          out_buf = d->output(i);
+
           std::vector<tag_t>::iterator t;
-          for(t = rtags.begin(); t != rtags.end(); t++) {
-            tag_t new_tag = *t;
-            new_tag.offset = ((double)new_tag.offset * rrate) + 0.5;
-            d->output(i)->add_item_tag(new_tag);
+          if(rrate == 1.0) {
+            for(t = rtags.begin(); t != rtags.end(); t++) {
+                out_buf->add_item_tag(*t);
+            }
+          }
+          else if(use_fp_rrate) {
+            for(t = rtags.begin(); t != rtags.end(); t++) {
+              tag_t new_tag = *t;
+              new_tag.offset = ((double)new_tag.offset * rrate) + 0.5;
+              out_buf->add_item_tag(new_tag);
+            }
+          }
+          else {
+            mpz_class offset;
+            for(t = rtags.begin(); t != rtags.end(); t++) {
+              tag_t new_tag = *t;
+              mpz_import(offset.get_mpz_t(), 1, 1, sizeof(new_tag.offset), 0, 0, &new_tag.offset);
+              offset = offset * mp_rrate + one_half;
+              new_tag.offset = offset.get_ui();
+              out_buf->add_item_tag(new_tag);
+            }
           }
         }
       }
@@ -149,7 +201,6 @@ namespace gr {
         std::cerr << "Error: block_executor: propagation_policy 'ONE-TO-ONE' requires ninputs == noutputs" << std::endl;
         return false;
       }
-
       break;
     default:
       return true;
@@ -192,7 +243,6 @@ namespace gr {
     int max_noutput_items;
     int new_alignment = 0;
     int alignment_state = -1;
-    double rrate;
 
     block        *m = d_block.get();
     block_detail *d = m->detail().get();
@@ -244,9 +294,10 @@ namespace gr {
           /*
            * Acquire the mutex and grab local copies of items_available and done.
            */
-          gr::thread::scoped_lock guard(*d->input(i)->mutex());
-          d_ninput_items[i] = d->input(i)->items_available();
-          d_input_done[i] = d->input(i)->done();
+          buffer_reader_sptr in_buf = d->input(i);
+          gr::thread::scoped_lock guard(*in_buf->mutex());
+          d_ninput_items[i] = in_buf->items_available();
+          d_input_done[i] = in_buf->done();
         }
 
         LOG(*d_log << "  d_ninput_items[" << i << "] = " << d_ninput_items[i] << std::endl);
@@ -288,9 +339,10 @@ namespace gr {
           /*
            * Acquire the mutex and grab local copies of items_available and done.
            */
-          gr::thread::scoped_lock guard(*d->input(i)->mutex());
-          d_ninput_items[i] = d->input(i)->items_available ();
-          d_input_done[i] = d->input(i)->done();
+          buffer_reader_sptr in_buf = d->input(i);
+          gr::thread::scoped_lock guard(*in_buf->mutex());
+          d_ninput_items[i] = in_buf->items_available ();
+          d_input_done[i] = in_buf->done();
         }
         max_items_avail = std::max(max_items_avail, d_ninput_items[i]);
       }
@@ -299,10 +351,8 @@ namespace gr {
       noutput_items = min_available_space(d, m->output_multiple(), m->min_noutput_items());
       if(ENABLE_LOGGING) {
         *d_log << " regular ";
-        if(m->relative_rate() >= 1.0)
-          *d_log << "1:" << m->relative_rate() << std::endl;
-        else
-          *d_log << 1.0/m->relative_rate() << ":1\n";
+        *d_log << m->relative_rate_i() << ":"
+               << m->relative_rate_d() << std::endl;
         *d_log << "  max_items_avail = " << max_items_avail << std::endl;
         *d_log << "  noutput_items = " << noutput_items << std::endl;
       }
@@ -370,11 +420,24 @@ namespace gr {
       // ask the block how much input they need to produce noutput_items
       m->forecast (noutput_items, d_ninput_items_required);
 
-      // See if we've got sufficient input available
+      // See if we've got sufficient input available and make sure we
+      // didn't overflow on the input.
       int i;
-      for(i = 0; i < d->ninputs (); i++)
+      for(i = 0; i < d->ninputs (); i++) {
         if(d_ninput_items_required[i] > d_ninput_items[i])	// not enough
           break;
+
+        if(d_ninput_items_required[i] < 0) {
+          std::cerr << "\nsched: <block " << m->name()
+                    << " (" << m->unique_id() << ")>"
+                    << " thinks its ninput_items required is "
+                    << d_ninput_items_required[i]
+                    << " and cannot be negative.\n"
+                    << "Some parameterization is wrong. "
+                    << "Too large a decimation value?\n\n";
+          goto were_done;
+        }
+      }
 
       if(i < d->ninputs()) {			// not enough input on input[i]
         // if we can, try reducing the size of our output request
@@ -390,7 +453,8 @@ namespace gr {
           goto were_done;
 
         // Is it possible to ever fulfill this request?
-        if(d_ninput_items_required[i] > d->input(i)->max_possible_items_available()) {
+        buffer_reader_sptr in_buf = d->input(i);
+        if(d_ninput_items_required[i] > in_buf->max_possible_items_available()) {
           // Nope, never going to happen...
           std::cerr << "\nsched: <block " << m->name()
                     << " (" << m->unique_id() << ")>"
@@ -399,7 +463,7 @@ namespace gr {
                     << "  ninput_items_required = "
                     << d_ninput_items_required[i] << "\n"
                     << "  max_possible_items_available = "
-                    << d->input(i)->max_possible_items_available() << "\n"
+                    << in_buf->max_possible_items_available() << "\n"
                     << "  If this is a filter, consider reducing the number of taps.\n";
           goto were_done;
         }
@@ -451,19 +515,10 @@ namespace gr {
         m->set_is_unaligned(m->unaligned() != 0);
       }
 
-      // For some blocks that can change their produce/consume ratio
-      // (the relative_rate), we might want to automatically update
-      // based on the amount of items written/read.
-      // In the block constructor, use enable_update_rate(true).
-      if(m->update_rate()) {
-        rrate = ((double)(m->nitems_written(0)+n)) / ((double)m->nitems_read(0));
-        if(rrate > 0)
-          m->set_relative_rate(rrate);
-      }
-
       // Now propagate the tags based on the new relative rate
       if(!propagate_tags(m->tag_propagation_policy(), d,
                          d_start_nitems_read, m->relative_rate(),
+                         m->mp_relative_rate(), m->update_rate(),
                          d_returned_tags, m->unique_id()))
         goto were_done;
 
@@ -472,6 +527,18 @@ namespace gr {
 
       if(n != block::WORK_CALLED_PRODUCE)
         d->produce_each(n);     // advance write pointers
+
+      // For some blocks that can change their produce/consume ratio
+      // (the relative_rate), we might want to automatically update
+      // based on the amount of items written/read.
+      // In the block constructor, use enable_update_rate(true).
+      if(m->update_rate()) {
+        //rrate = ((double)(m->nitems_written(0))) / ((double)m->nitems_read(0));
+        //if(rrate > 0.0)
+        //  m->set_relative_rate(rrate);
+        if((n > 0) && (d->consumed() > 0))
+          m->set_relative_rate((uint64_t)n, (uint64_t)d->consumed());
+      }
 
       if(d->d_produce_or > 0)   // block produced something
         return READY;

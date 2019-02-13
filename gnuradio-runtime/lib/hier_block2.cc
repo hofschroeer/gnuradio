@@ -57,6 +57,8 @@ namespace gr {
 
   hier_block2::~hier_block2()
   {
+    disconnect_all();
+    gnuradio::detail::sptr_magic::cancel_initial_sptr(this);
     delete d_detail;
   }
 
@@ -174,6 +176,18 @@ namespace gr {
   hier_block2::processor_affinity()
   {
     return d_detail->processor_affinity();
+  }
+
+  void
+  hier_block2::set_log_level(std::string level)
+  {
+    d_detail->set_log_level(level);
+  }
+
+  std::string
+  hier_block2::log_level()
+  {
+    return d_detail->log_level();
   }
 
   std::string

@@ -23,12 +23,10 @@
 include_directories(
     ${GR_VIDEO_SDL_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
-    ${LOG4CXX_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${SDL_INCLUDE_DIR}
 )
 
-link_directories(${LOG4CXX_LIBRARY_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 
 if(ENABLE_GR_CTRLPORT)
@@ -65,7 +63,7 @@ ENDIF(MSVC)
 
 add_library(gnuradio-video-sdl SHARED ${video_sdl_sources})
 target_link_libraries(gnuradio-video-sdl ${video_sdl_libs})
-GR_LIBRARY_FOO(gnuradio-video-sdl RUNTIME_COMPONENT "video_sdl_runtime" DEVEL_COMPONENT "video_sdl_devel")
+GR_LIBRARY_FOO(gnuradio-video-sdl)
 add_dependencies(gnuradio-video-sdl gnuradio-runtime)
 
 if(ENABLE_STATIC_LIBS)
@@ -90,6 +88,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-video-sdl_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "video_sdl_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

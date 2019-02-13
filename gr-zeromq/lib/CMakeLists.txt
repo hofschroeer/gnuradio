@@ -37,6 +37,7 @@ endif(ENABLE_GR_CTRLPORT)
 # Setup library
 ########################################################################
 list(APPEND zeromq_sources
+  base_impl.cc
   pub_sink_impl.cc
   pub_msg_sink_impl.cc
   sub_source_impl.cc
@@ -74,7 +75,7 @@ list(APPEND zeromq_libs
 
 add_library(gnuradio-zeromq SHARED ${zeromq_sources})
 target_link_libraries(gnuradio-zeromq ${zeromq_libs})
-GR_LIBRARY_FOO(gnuradio-zeromq RUNTIME_COMPONENT "zeromq_runtime" DEVEL_COMPONENT "zeromq_devel")
+GR_LIBRARY_FOO(gnuradio-zeromq)
 
 if(ENABLE_STATIC_LIBS)
   if(ENABLE_GR_CTRLPORT)
@@ -96,6 +97,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-zeromq_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "zeromq_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

@@ -23,13 +23,11 @@
 include_directories(
     ${GR_COMEDI_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
-    ${LOG4CXX_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${COMEDI_INCLUDE_DIRS}
 )
 
 link_directories(
-  ${LOG4CXX_LIBRARY_DIRS}
     ${Boost_LIBRARY_DIRS}
     ${COMEDI_LIBRARY_DIRS}
 )
@@ -54,7 +52,7 @@ list(APPEND comedi_libs
 
 add_library(gnuradio-comedi SHARED ${comedi_sources})
 target_link_libraries(gnuradio-comedi ${comedi_libs})
-GR_LIBRARY_FOO(gnuradio-comedi RUNTIME_COMPONENT "comedi_runtime" DEVEL_COMPONENT "comedi_devel")
+GR_LIBRARY_FOO(gnuradio-comedi)
 
 if(ENABLE_STATIC_LIBS)
   if(ENABLE_GR_CTRLPORT)
@@ -76,6 +74,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-comedi_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "comedi_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

@@ -54,7 +54,6 @@ namespace gr {
         : generic_decoder("cc_decoder"),
           d_k(k),
           d_rate(rate),
-          d_partial_rate(rate),
           d_polys(polys),
           d_mode(mode),
           d_padding(0),
@@ -156,6 +155,9 @@ namespace gr {
         kerneltype << k_ << d_k << r_ << d_rate;
 
         d_kernel = yp_kernel[kerneltype.str()];
+        if (d_kernel == NULL) {
+          throw std::runtime_error("cc_decoder: parameters not supported");
+        }
       }
 
       cc_decoder_impl::~cc_decoder_impl()

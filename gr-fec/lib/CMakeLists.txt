@@ -32,7 +32,6 @@ include_directories(
     ${GR_BLOCKS_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
     ${VOLK_INCLUDE_DIRS}
-    ${LOG4CPP_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
 )
 
@@ -42,7 +41,6 @@ endif(ENABLE_GR_CTRLPORT)
 
 link_directories(
   ${Boost_LIBRARY_DIRS}
-  ${LOG4CPP_LIBRARY_DIRS}
 )
 
 ########################################################################
@@ -71,7 +69,7 @@ list(APPEND gnuradio_fec_sources
   puncture_bb_impl.cc
   puncture_ff_impl.cc
   depuncture_bb_impl.cc
-  ldpc_encoder.cc
+  ldpc_encoder_impl.cc
   ldpc_decoder.cc
   cldpc.cc
   awgn_bp.cc
@@ -80,7 +78,15 @@ list(APPEND gnuradio_fec_sources
   alist.cc
   tpc_common.cc
   tpc_decoder.cc
-  tpc_encoder.cc 
+  tpc_encoder.cc
+  polar_encoder.cc
+  polar_decoder_sc.cc
+  polar_common.cc
+  polar_decoder_sc_list.cc
+  polar_decoder_common.cc
+  scl_list.cc
+  polar_encoder_systematic.cc
+  polar_decoder_sc_systematic.cc
 )
 
 #Add Windows DLL resource file if using MSVC
@@ -102,12 +108,27 @@ list(APPEND gnuradio_fec_libs
     gnuradio-runtime
     ${VOLK_LIBRARIES}
     ${Boost_LIBRARIES}
-    ${LOG4CPP_LIBRARIES}
 )
+
+# Only include the LDPC work if we have GSL installed
+if(GSL_FOUND)
+  include_directories(${GSL_INCLUDE_DIRS})
+  link_directories(${GSL_LIBRARY_DIRS})
+  list(APPEND gnuradio_fec_libs ${GSL_LDFLAGS})
+
+  list(APPEND gnuradio_fec_sources
+    ldpc_bit_flip_decoder_impl.cc
+    ldpc_par_mtrx_encoder_impl.cc
+    ldpc_gen_mtrx_encoder_impl.cc
+    ldpc_H_matrix_impl.cc
+    ldpc_G_matrix_impl.cc
+    fec_mtrx_impl.cc
+    )
+endif(GSL_FOUND)
 
 add_library(gnuradio-fec SHARED ${gnuradio_fec_sources})
 target_link_libraries(gnuradio-fec ${gnuradio_fec_libs})
-GR_LIBRARY_FOO(gnuradio-fec RUNTIME_COMPONENT "fec_runtime" DEVEL_COMPONENT "fec_devel")
+GR_LIBRARY_FOO(gnuradio-fec)
 
 if(ENABLE_STATIC_LIBS)
   if(ENABLE_GR_CTRLPORT)
@@ -129,6 +150,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-fec_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "fec_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

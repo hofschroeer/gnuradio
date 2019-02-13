@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2011-2013 Free Software Foundation, Inc.
+ * Copyright 2011-2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -45,6 +45,17 @@ namespace gr {
      * and plots them in the time domain. Each signal is plotted with a
      * different color, and the \a set_title and \a set_color functions
      * can be used to change the lable and color for a given input number.
+     *
+     * The sink supports plotting streaming float data or
+     * messages. The message port is named "in". The two modes cannot
+     * be used simultaneously, and \p nconnections should be set to 0
+     * when using the message mode. GRC handles this issue by
+     * providing the "Float Message" type that removes the streaming
+     * port(s).
+     *
+     * This sink can plot messages that contain either uniform vectors
+     * of float 32 values (pmt::is_f32vector) or PDUs where the data
+     * is a uniform vector of float 32 values.
      */
     class QTGUI_API time_sink_f : virtual public sync_block
     {
@@ -63,7 +74,7 @@ namespace gr {
        */
       static sptr make(int size, double samp_rate,
 		       const std::string &name,
-		       int nconnections=1,
+		       unsigned int nconnections=1,
 		       QWidget *parent=NULL);
 
       virtual void exec_() = 0;
@@ -80,14 +91,14 @@ namespace gr {
                                const std::string &unit="") = 0;
       virtual void set_update_time(double t) = 0;
       virtual void set_title(const std::string &title) = 0;
-      virtual void set_line_label(int which, const std::string &line) = 0;
-      virtual void set_line_color(int which, const std::string &color) = 0;
-      virtual void set_line_width(int which, int width) = 0;
-      virtual void set_line_style(int which, int style) = 0;
-      virtual void set_line_marker(int which, int marker) = 0;
+      virtual void set_line_label(unsigned int which, const std::string &line) = 0;
+      virtual void set_line_color(unsigned int which, const std::string &color) = 0;
+      virtual void set_line_width(unsigned int which, int width) = 0;
+      virtual void set_line_style(unsigned int which, int style) = 0;
+      virtual void set_line_marker(unsigned int which, int marker) = 0;
       virtual void set_nsamps(const int newsize) = 0;
       virtual void set_samp_rate(const double samp_rate) = 0;
-      virtual void set_line_alpha(int which, double alpha) = 0;
+      virtual void set_line_alpha(unsigned int which, double alpha) = 0;
 
       /*!
        * Set up a trigger for the sink to know when to start
@@ -132,12 +143,12 @@ namespace gr {
                                     const std::string &tag_key="") = 0;
 
       virtual std::string title() = 0;
-      virtual std::string line_label(int which) = 0;
-      virtual std::string line_color(int which) = 0;
-      virtual int line_width(int which) = 0;
-      virtual int line_style(int which) = 0;
-      virtual int line_marker(int which) = 0;
-      virtual double line_alpha(int which) = 0;
+      virtual std::string line_label(unsigned int which) = 0;
+      virtual std::string line_color(unsigned int which) = 0;
+      virtual int line_width(unsigned int which) = 0;
+      virtual int line_style(unsigned int which) = 0;
+      virtual int line_marker(unsigned int which) = 0;
+      virtual double line_alpha(unsigned int which) = 0;
 
       virtual void set_size(int width, int height) = 0;
 
@@ -148,7 +159,9 @@ namespace gr {
       virtual void enable_semilogx(bool en=true) = 0;
       virtual void enable_semilogy(bool en=true) = 0;
       virtual void enable_control_panel(bool en=true) = 0;
-      virtual void enable_tags(int which, bool en) = 0;
+      virtual void enable_tags(unsigned int which, bool en) = 0;
+      virtual void enable_tags(bool en) = 0;
+      virtual void enable_axis_labels(bool en=true) = 0;
       virtual void disable_legend() = 0;
 
       virtual int nsamps() const = 0;

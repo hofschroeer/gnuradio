@@ -39,7 +39,7 @@ namespace gr {
    * \brief Base class for representing user preferences a la windows INI files.
    * \ingroup misc
    *
-   * The real implementation is in Python, and is accessable from C++
+   * The real implementation is in Python, and is accessible from C++
    * via the magic of SWIG directors.
    */
   class GR_RUNTIME_API prefs
@@ -165,8 +165,7 @@ namespace gr {
 
   protected:
     virtual std::vector<std::string> _sys_prefs_filenames();
-    virtual std::string _read_files(const std::vector<std::string> &filenames);
-    virtual void _convert_to_map(const std::string &conf);
+    virtual void _read_files(const std::vector<std::string> &filenames);
     virtual char * option_to_env(std::string section, std::string option);
 
   private:

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2013 Free Software Foundation, Inc.
+ * Copyright 2012,2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,10 +25,13 @@
 #endif
 
 #include "time_raster_sink_f_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
+
 #include <volk/volk.h>
+
+#include <string.h>
 
 namespace gr {
   namespace qtgui {
@@ -59,12 +62,12 @@ namespace gr {
 						     int nconnections,
 						     QWidget *parent)
       : sync_block("time_raster_sink_f",
-		      io_signature::make(1, -1, sizeof(float)),
-		      io_signature::make(0, 0, 0)),
+                   io_signature::make(0, nconnections, sizeof(float)),
+                   io_signature::make(0, 0, 0)),
 	d_name(name), d_nconnections(nconnections), d_parent(parent),
 	d_rows(rows), d_cols(cols),
-	d_mult(std::vector<float>(nconnections,1)),
-	d_offset(std::vector<float>(nconnections,0)),
+	d_mult(std::vector<float>(nconnections+1,1)),
+	d_offset(std::vector<float>(nconnections+1,0)),
 	d_samp_rate(samp_rate)
     {
       // Required now for Qt; argc must be greater than 0 and argv
@@ -79,12 +82,18 @@ namespace gr {
 
       d_index = 0;
 
+      // setup PDU handling input port
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
+                      boost::bind(&time_raster_sink_f_impl::handle_pdus, this, _1));
+
       d_icols = static_cast<int>(ceil(d_cols));
       d_tmpflt = (float*)volk_malloc(d_icols*sizeof(float),
                                      volk_get_alignment());
       memset(d_tmpflt, 0, d_icols*sizeof(float));
 
-      for(int i = 0; i < d_nconnections; i++) {
+      // +1 for the PDU buffer
+      for(int i = 0; i < d_nconnections+1; i++) {
 	d_residbufs.push_back((double*)volk_malloc(d_icols*sizeof(double),
                                                    volk_get_alignment()));
 	memset(d_residbufs[i], 0, d_icols*sizeof(double));
@@ -102,7 +111,7 @@ namespace gr {
         d_main_gui->close();
 
       volk_free(d_tmpflt);
-      for(int i = 0; i < d_nconnections; i++) {
+      for(int i = 0; i < d_nconnections+1; i++) {
 	volk_free(d_residbufs[i]);
       }
 
@@ -122,7 +131,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -130,17 +139,14 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
       // Create time raster plot; as a bit input, we expect to see 1's
       // and 0's from each stream, so we set the maximum intensity
       // (zmax) to the number of connections so after adding the
       // streams, the max will the the max of 1's from all streams.
-      d_main_gui = new TimeRasterDisplayForm(d_nconnections,
+      int numplots = (d_nconnections > 0) ? d_nconnections : 1;
+      d_main_gui = new TimeRasterDisplayForm(numplots,
 					     d_samp_rate,
 					     d_rows, d_cols,
 					     1, d_parent);
@@ -197,43 +203,43 @@ namespace gr {
     }
 
     void
-    time_raster_sink_f_impl::set_line_label(int which, const std::string &label)
+    time_raster_sink_f_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    time_raster_sink_f_impl::set_line_color(int which, const std::string &color)
+    time_raster_sink_f_impl::set_line_color(unsigned int which, const std::string &color)
     {
       d_main_gui->setLineColor(which, color.c_str());
     }
 
     void
-    time_raster_sink_f_impl::set_line_width(int which, int width)
+    time_raster_sink_f_impl::set_line_width(unsigned int which, int width)
     {
       d_main_gui->setLineWidth(which, width);
     }
 
     void
-    time_raster_sink_f_impl::set_line_style(int which, Qt::PenStyle style)
+    time_raster_sink_f_impl::set_line_style(unsigned int which, Qt::PenStyle style)
     {
       d_main_gui->setLineStyle(which, style);
     }
 
     void
-    time_raster_sink_f_impl::set_line_marker(int which, QwtSymbol::Style marker)
+    time_raster_sink_f_impl::set_line_marker(unsigned int which, QwtSymbol::Style marker)
     {
       d_main_gui->setLineMarker(which, marker);
     }
 
     void
-    time_raster_sink_f_impl::set_color_map(int which, const int color)
+    time_raster_sink_f_impl::set_color_map(unsigned int which, const int color)
     {
       d_main_gui->setColorMap(which, color);
     }
 
     void
-    time_raster_sink_f_impl::set_line_alpha(int which, double alpha)
+    time_raster_sink_f_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setAlpha(which, (int)(255.0*alpha));
     }
@@ -254,13 +260,36 @@ namespace gr {
     void
     time_raster_sink_f_impl::set_num_rows(double rows)
     {
+      gr::thread::scoped_lock lock(d_setlock);
+      d_rows = rows;
       d_main_gui->setNumRows(rows);
     }
 
     void
     time_raster_sink_f_impl::set_num_cols(double cols)
     {
-      d_main_gui->setNumCols(cols);
+      if(d_cols != cols) {
+        gr::thread::scoped_lock lock(d_setlock);
+
+        d_qApplication->postEvent(d_main_gui,
+                                  new TimeRasterSetSize(d_rows, cols));
+
+        d_cols = cols;
+        d_icols = static_cast<int>(ceil(d_cols));
+
+        volk_free(d_tmpflt);
+        d_tmpflt = (float*)volk_malloc(d_icols*sizeof(float),
+                                       volk_get_alignment());
+        memset(d_tmpflt, 0, d_icols*sizeof(float));
+
+        for(int i = 0; i < d_nconnections+1; i++) {
+          volk_free(d_residbufs[i]);
+          d_residbufs[i] = (double*)volk_malloc(d_icols*sizeof(double),
+                                                volk_get_alignment());
+          memset(d_residbufs[i], 0, d_icols*sizeof(double));
+        }
+        reset();
+      }
     }
 
     std::string
@@ -270,43 +299,43 @@ namespace gr {
     }
 
     std::string
-    time_raster_sink_f_impl::line_label(int which)
+    time_raster_sink_f_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     std::string
-    time_raster_sink_f_impl::line_color(int which)
+    time_raster_sink_f_impl::line_color(unsigned int which)
     {
       return d_main_gui->lineColor(which).toStdString();
     }
 
     int
-    time_raster_sink_f_impl::line_width(int which)
+    time_raster_sink_f_impl::line_width(unsigned int which)
     {
       return d_main_gui->lineWidth(which);
     }
 
     int
-    time_raster_sink_f_impl::line_style(int which)
+    time_raster_sink_f_impl::line_style(unsigned int which)
     {
       return d_main_gui->lineStyle(which);
     }
 
     int
-    time_raster_sink_f_impl::line_marker(int which)
+    time_raster_sink_f_impl::line_marker(unsigned int which)
     {
       return d_main_gui->lineMarker(which);
     }
 
     int
-    time_raster_sink_f_impl::color_map(int which)
+    time_raster_sink_f_impl::color_map(unsigned int which)
     {
       return d_main_gui->getColorMap(which);
     }
 
     double
-    time_raster_sink_f_impl::line_alpha(int which)
+    time_raster_sink_f_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->markerAlpha(which))/255.0;
     }
@@ -378,6 +407,12 @@ namespace gr {
     }
 
     void
+    time_raster_sink_f_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
+    }
+
+    void
     time_raster_sink_f_impl::enable_autoscale(bool en)
     {
       d_main_gui->autoScale(en);
@@ -389,6 +424,13 @@ namespace gr {
       d_index = 0;
     }
 
+    void
+    time_raster_sink_f_impl::_ncols_resize()
+    {
+      double cols = d_main_gui->numCols();
+      set_num_cols(cols);
+    }
+
     int
     time_raster_sink_f_impl::work(int noutput_items,
 				  gr_vector_const_void_star &input_items,
@@ -397,22 +439,7 @@ namespace gr {
       int n=0, j=0, idx=0;
       const float *in = (const float*)input_items[0];
 
-      double cols = d_main_gui->numCols();
-      if(d_cols != cols) {
-	d_cols = cols;
-	d_index = 0;
-        d_icols = static_cast<int>(ceil(d_cols));
-	volk_free(d_tmpflt);
-	d_tmpflt = (float*)volk_malloc(d_icols*sizeof(float),
-                                       volk_get_alignment());
-	memset(d_tmpflt, 0, d_icols*sizeof(float));
-	for(int i = 0; i < d_nconnections; i++) {
-	  volk_free(d_residbufs[i]);
-	  d_residbufs[i] = (double*)volk_malloc(d_icols*sizeof(double),
-                                                volk_get_alignment());
-	  memset(d_residbufs[i], 0, d_icols*sizeof(double));
-	}
-      }
+      _ncols_resize();
 
       for(int i = 0; i < noutput_items; i += d_icols) {
 	unsigned int datasize = noutput_items - i;
@@ -465,6 +492,69 @@ namespace gr {
       }
 
       return j;
+    }
+
+    void
+    time_raster_sink_f_impl::handle_pdus(pmt::pmt_t msg)
+    {
+      size_t len;
+      pmt::pmt_t dict, samples;
+
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("time_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
+
+      len = pmt::length(samples);
+
+      const float *in;
+      if(pmt::is_f32vector(samples)) {
+        in = (const float*)pmt::f32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("time_raster_sink_f: unknown data type "
+                                 "of samples; must be float.");
+      }
+
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
+
+        _ncols_resize();
+
+        d_rows = ceil(static_cast<double>(len) / static_cast<double>(d_cols));
+        int irows = static_cast<int>(d_rows);
+
+        d_qApplication->postEvent(d_main_gui,
+                                  new TimeRasterSetSize(d_rows, d_cols));
+
+        int idx = 0;
+        for(int r = 0; r < irows; r++) {
+          // Scale and add offset
+          int cpy_len = std::min(static_cast<size_t>(d_cols), len - idx);
+          memset(d_residbufs[d_nconnections], 0, d_cols*sizeof(double));
+          volk_32f_s32f_multiply_32f(d_tmpflt, &in[idx], d_mult[d_nconnections], cpy_len);
+          for(int c = 0; c < cpy_len; c++) {
+            d_tmpflt[c] = d_tmpflt[c] + d_offset[d_nconnections];
+          }
+
+          volk_32f_convert_64f_u(d_residbufs[d_nconnections], d_tmpflt, cpy_len);
+
+          d_qApplication->postEvent(d_main_gui,
+                                    new TimeRasterUpdateEvent(d_residbufs, d_cols));
+          idx += d_cols;
+        }
+      }
     }
 
   } /* namespace qtgui */

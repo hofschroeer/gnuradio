@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2012-2013 Free Software Foundation, Inc.
+# Copyright 2012-2016 Free Software Foundation, Inc.
 #
 # This file is part of GNU Radio
 #
@@ -20,6 +20,8 @@
 # Boston, MA 02110-1301, USA.
 #
 
+from __future__ import print_function
+
 import sys, time, re, pprint
 import random,math,operator
 try:
@@ -28,19 +30,44 @@ try:
     matplotlib.use("QT4Agg")
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-    from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as NavigationToolbar
+
+    # Manage different matplotlib versions
+    try:
+        from matplotlib.backends.backend_qt4agg import NavigationToolbar2QTAgg as NavigationToolbar
+    except ImportError:
+        try:
+            from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
+        except ImportError:
+            print(sys.argv[0], "could not load QTAgg backend.")
+            sys.exit(1)
+
+
     from matplotlib.figure import Figure
 except ImportError:
-    print sys.argv[0], "requires networkx and matplotlib.", \
-       "Please check that they are installed and try again."
+    print(sys.argv[0], "requires networkx and matplotlib.",
+       "Please check that they are installed and try again.")
     sys.exit(1)
 
-from PyQt4 import QtCore,Qt,Qwt5
+from PyQt4 import QtCore,Qt
 import PyQt4.QtGui as QtGui
 import itertools
 
 from gnuradio import gr, ctrlport
 from gnuradio.ctrlport.GrDataPlotter import *
+
+#check for networkx version
+_critical_version = (1,11)
+_atleast_critical = False
+
+for act,ref in zip(nx.__version__.split("."), _critical_version):
+    _atleast_critical = (act >= ref)
+    if not act == ref:
+        break
+
+if _atleast_critical:
+    from networkx.drawing.nx_agraph import graphviz_layout
+else:
+    graphviz_layout = nx.graphviz_layout
 
 class MAINWindow(QtGui.QMainWindow):
     def minimumSizeHint(self):
@@ -257,7 +284,7 @@ class ConInfoDialog(QtGui.QDialog):
 
 class DataTable(QtGui.QWidget):
     def update(self):
-        print "update"
+        print("update")
 
     def closeEvent(self, event):
         self.timer = None
@@ -310,13 +337,12 @@ class DataTable(QtGui.QWidget):
         self.sp = self.f.add_subplot(111)
         self.sp.autoscale_view(True,True,True)
         self.sp.set_autoscale_on(True)
-        self.canvas = FigureCanvas(self.f)
 
         # set up tabs
         self.tabber = QtGui.QTabWidget();
         self.layout.addWidget(self.tabber);
         self.tabber.addTab(self.perfTable,"Table View");
-        self.tabber.addTab(self.canvas, "Graph View");
+        self.tabber.addTab(self.f.canvas, "Graph View");
 
         # set up timer
         self.timer = QtCore.QTimer()
@@ -377,7 +403,7 @@ class DataTableBuffers(DataTable):
 
         else:
             if(self._sort):
-                sorted_fullness = sorted(blockport_fullness.iteritems(),
+                sorted_fullness = sorted(blockport_fullness.items(),
                                          key=operator.itemgetter(1))
                 self._keymap = map(operator.itemgetter(0), sorted_fullness)
             else:
@@ -402,7 +428,7 @@ class DataTableBuffers(DataTable):
                 for r,w in zip(self.disp, sorted_fullness):
                     r.set_height(w[1])
 
-            self.canvas.draw()
+            self.f.canvas.draw()
 
 class DataTableRuntimes(DataTable):
     def __init__(self, radioclient, G):
@@ -423,7 +449,7 @@ class DataTableRuntimes(DataTable):
             total_work = 1
         work_times = dict(zip(
             map(lambda x: x.split("::")[0], wrk_knobs.keys()),
-            map(lambda x: x.value/total_work, wrk_knobs.values())))
+            map(lambda x: 1e-10 + x.value/total_work, wrk_knobs.values())))
 
         # update table view
         if(self.perfTable.isVisible()):
@@ -431,7 +457,7 @@ class DataTableRuntimes(DataTable):
 
         else:
             if(self._sort):
-                sorted_work = sorted(work_times.iteritems(), key=operator.itemgetter(1))
+                sorted_work = sorted(work_times.items(), key=operator.itemgetter(1))
                 self._keymap = map(operator.itemgetter(0), sorted_work)
             else:
                 if self._keymap:
@@ -441,7 +467,6 @@ class DataTableRuntimes(DataTable):
                 else:
                     sorted_work = work_times.items()
 
-            f = plt.figure(self.f.number)
             if(not self.disp):
                 self.disp = self.sp.bar(range(0,len(sorted_work)),
                                         map(lambda x: x[1], sorted_work),
@@ -456,7 +481,7 @@ class DataTableRuntimes(DataTable):
                 for r,w in zip(self.disp, sorted_work):
                     r.set_height(w[1])
 
-            self.canvas.draw()
+            self.f.canvas.draw()
 
 class MForm(QtGui.QWidget):
     def update(self):
@@ -475,7 +500,7 @@ class MForm(QtGui.QWidget):
                 self.clockSel.setCurrentIndex(self.clockSelIdx)
                 self.prevent_clock_change = False
             except:
-                print "WARNING: Failed to get current clock setting!"
+                print("WARNING: Failed to get current clock setting!")
 
             nodes_stream = self.G_stream.nodes()
             nodes_msg = self.G_msg.nodes()
@@ -548,7 +573,7 @@ class MForm(QtGui.QWidget):
             self.parent.statusBar().showMessage("Current GNU Radio Control Port Query Latency: %f ms"%\
                                                     (latency*1000))
 
-        except Exception, e:
+        except Exception as e:
             sys.stderr.write("gr-perf-monitorx: radio.getKnobs threw exception ({0}).\n".format(e))
             if(type(self.parent) is MAINWindow):
                 # Find window of connection
@@ -602,7 +627,7 @@ class MForm(QtGui.QWidget):
             return;
         idx = self.clockSel.currentIndex();
         clk = self.clocks.values()[idx]
-#        print "UPDATE CLOCK!!! %d -> %d"%(idx,clk);
+#        print("UPDATE CLOCK!!! %d -> %d"%(idx,clk);)
         k = self.radioclient.getKnobs([self.clockKey]);
         k[self.clockKey].value = clk;
         km = {};
@@ -775,11 +800,10 @@ class MForm(QtGui.QWidget):
         self.sp.autoscale_view(True,True,True);
         self.sp.set_autoscale_on(True)
 
-        self.canvas = FigureCanvas(self.f)
-        self.layout.addWidget(self.canvas);
+        self.layout.addWidget(self.f.canvas);
 
-        self.pos = nx.graphviz_layout(self.G);
-        #self.pos = nx.pygraphviz_layout(self.G);
+        self.pos = graphviz_layout(self.G);
+        #self.pos = pygraphviz_layout(self.G);
         #self.pos = nx.spectral_layout(self.G);
         #self.pos = nx.circular_layout(self.G);
         #self.pos = nx.shell_layout(self.G);
@@ -840,14 +864,14 @@ class MForm(QtGui.QWidget):
     def drawGraph(self):
 
         self.do_update = True
-        self.canvas.updateGeometry()
+        self.f.canvas.updateGeometry()
         self.sp.clear()
         plt.figure(self.f.number)
         plt.subplot(111)
         nx.draw(self.G, self.pos,
                 edge_color=self.edge_weights,
                 node_color='#A0CBE2',
-                width=map(lambda x: 3+math.log(x), self.edge_weights),
+                width=map(lambda x: 3+math.log(x+1e-20), self.edge_weights),
                 node_shape="s",
                 node_size=self.node_weights,
                 edge_cmap=plt.cm.Reds,
@@ -857,8 +881,7 @@ class MForm(QtGui.QWidget):
         nx.draw_networkx_labels(self.G, self.pos,
                                 font_size=12)
 
-        self.canvas.draw()
-        self.canvas.show()
+        self.f.canvas.show()
 
     def updateGraph(self):
 
@@ -872,7 +895,7 @@ class MForm(QtGui.QWidget):
 
         nx.draw_networkx_edges(self.G, self.pos,
                                edge_color=self.edge_weights,
-                               width=map(lambda x: 3+math.log(x), self.edge_weights),
+                               width=map(lambda x: 3+math.log(x+1e-20), self.edge_weights),
                                edge_cmap=plt.cm.Reds,
                                ax=self.sp,
                                arrows=False)
@@ -880,7 +903,7 @@ class MForm(QtGui.QWidget):
         nx.draw_networkx_labels(self.G, self.pos,
                                 ax=self.sp, font_size=12)
 
-        self.canvas.draw()
+        self.f.canvas.draw()
 
 
 class MyApp(object):

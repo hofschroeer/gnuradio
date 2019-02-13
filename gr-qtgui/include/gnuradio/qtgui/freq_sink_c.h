@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2014 Free Software Foundation, Inc.
+ * Copyright 2012,2014-2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -48,15 +48,31 @@ namespace gr {
      * functions can be used to change the lable and color for a given
      * input number.
      *
+     * The sink supports plotting streaming complex data or
+     * messages. The message port is named "in". The two modes cannot
+     * be used simultaneously, and \p nconnections should be set to 0
+     * when using the message mode. GRC handles this issue by
+     * providing the "Complex Message" type that removes the streaming
+     * port(s).
+     *
+     * This sink can plot messages that contain either uniform vectors
+     * of complex 32 values (pmt::is_c32vector) or PDUs where the data
+     * is a uniform vector of complex 32 values.
+     *
      * Message Ports:
      *
      * - freq (input):
-     *        Receives a PMT pair: (intern("freq"), double(frequency).
+     *        Receives a PMT pair: (intern("freq"), double(frequency)).
      *        This is used to retune the center frequency of the
      *        display's x-axis.
+     * 
+     * - bw (input):
+     *        Receives a PMT pair: (intern("bw"), double(bandwidth)).
+     *        This is used to programmatically change the bandwidth of
+     *        of the display's x-axis.
      *
      * - freq (output):
-     *        Produces a PMT pair with (intern("freq"), double(frequency).
+     *        Produces a PMT pair with (intern("freq"), double(frequency)).
      *        When a user double-clicks on the display, the block
      *        produces and emits a message containing the frequency of
      *        where on the x-axis the user clicked. This value can be
@@ -76,12 +92,17 @@ namespace gr {
       /*!
        * \brief Build a complex PSD sink.
        *
-       * \param fftsize size of the FFT to compute and display
-       * \param wintype type of window to apply (see gnuradio/filter/firdes.h)
+       * \param fftsize size of the FFT to compute and display. If using
+       *        the PDU message port to plot samples, the length of
+       *        each PDU must be a multiple of the FFT size.
+       * \param wintype type of window to apply (see gr::fft::window::win_type)
        * \param fc center frequency of signal (use for x-axis labels)
        * \param bw bandwidth of signal (used to set x-axis labels)
        * \param name title for the plot
-       * \param nconnections number of signals connected to sink
+       * \param nconnections number of signals to be connected to the
+       *        sink. The PDU message port is always available for a
+       *        connection, and this value must be set to 0 if only
+       *        the PDU message port is being used.
        * \param parent a QWidget parent object, if any
        */
       static sptr make(int fftsize, int wintype,
@@ -112,12 +133,13 @@ namespace gr {
       virtual void set_update_time(double t) = 0;
 
       virtual void set_title(const std::string &title) = 0;
-      virtual void set_line_label(int which, const std::string &label) = 0;
-      virtual void set_line_color(int which, const std::string &color) = 0;
-      virtual void set_line_width(int which, int width) = 0;
-      virtual void set_line_style(int which, int style) = 0;
-      virtual void set_line_marker(int which, int marker) = 0;
-      virtual void set_line_alpha(int which, double alpha) = 0;
+      virtual void set_y_label(const std::string &label, const std::string &unit) = 0;
+      virtual void set_line_label(unsigned int which, const std::string &label) = 0;
+      virtual void set_line_color(unsigned int which, const std::string &color) = 0;
+      virtual void set_line_width(unsigned int which, int width) = 0;
+      virtual void set_line_style(unsigned int which, int style) = 0;
+      virtual void set_line_marker(unsigned int which, int marker) = 0;
+      virtual void set_line_alpha(unsigned int which, double alpha) = 0;
 
       /*!
        * Set up a trigger for the sink to know when to start
@@ -147,12 +169,12 @@ namespace gr {
                                     const std::string &tag_key="") = 0;
 
       virtual std::string title() = 0;
-      virtual std::string line_label(int which) = 0;
-      virtual std::string line_color(int which) = 0;
-      virtual int line_width(int which) = 0;
-      virtual int line_style(int which) = 0;
-      virtual int line_marker(int which) = 0;
-      virtual double line_alpha(int which) = 0;
+      virtual std::string line_label(unsigned int which) = 0;
+      virtual std::string line_color(unsigned int which) = 0;
+      virtual int line_width(unsigned int which) = 0;
+      virtual int line_style(unsigned int which) = 0;
+      virtual int line_marker(unsigned int which) = 0;
+      virtual double line_alpha(unsigned int which) = 0;
 
       virtual void set_size(int width, int height) = 0;
 
@@ -166,6 +188,7 @@ namespace gr {
       virtual void clear_min_hold() = 0;
       virtual void disable_legend() = 0;
       virtual void reset() = 0;
+      virtual void enable_axis_labels(bool en=true) = 0;
 
       QApplication *d_qApplication;
     };

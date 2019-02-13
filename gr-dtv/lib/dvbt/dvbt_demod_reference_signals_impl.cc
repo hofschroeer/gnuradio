@@ -102,7 +102,8 @@ namespace gr {
       const gr_complex *in = (const gr_complex *) input_items[0];
       gr_complex *out = (gr_complex *) output_items[0];
 
-      int symbol_index, frame_index;
+      int symbol_index = 0;
+      int frame_index = 0;
       int to_out = 0;
 
       for (int i = 0; i < noutput_items; i++) {
@@ -111,7 +112,7 @@ namespace gr {
 
       /*
        * Wait for a sync_start tag from upstream that signals when to start.
-       * Allways consume until to a superframe start.
+       * Always consume until to a superframe start.
        */
       if (is_sync_start(noutput_items)) {
         d_init = 0;

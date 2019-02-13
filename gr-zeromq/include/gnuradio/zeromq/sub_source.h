@@ -48,11 +48,17 @@ namespace gr {
        * \param itemsize Size of a stream item in bytes.
        * \param vlen Vector length of the input items. Note that one vector is one item.
        * \param address  ZMQ socket address specifier.
-       * \param timeout  Receive timeout in seconds, default is 100ms, 1us increments.
+       * \param timeout  Receive timeout in milliseconds, default is 100ms, 1us increments.
        * \param pass_tags Whether source will look for and deserialize tags.
+       * \param hwm High Watermark to configure the socket to (-1 => zmq's default)
        */
       static sptr make(size_t itemsize, size_t vlen, char *address,
-                       int timeout=100, bool pass_tags=false);
+                       int timeout=100, bool pass_tags=false, int hwm=-1);
+
+      /*!
+       * \brief Return a std::string of ZMQ_LAST_ENDPOINT from the underlying ZMQ socket.
+       */
+      virtual std::string last_endpoint() = 0;
     };
 
   } // namespace zeromq

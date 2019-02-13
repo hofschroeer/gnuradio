@@ -46,16 +46,16 @@ namespace gr {
        * <EM>M</EM>.
        *
        * The PFB channelizer code takes the taps generated above and
-       * builds a set of filters. The set contains <EM>M</EM> number
-       * of filters and each filter contains ceil(taps.size()/decim)
-       * number of taps.  Each tap from the filter prototype is
+       * builds a set of filters. The set contains <EM>M</EM>
+       * filters and each filter contains ceil(taps.size()/decim)
+       * taps.  Each tap from the filter prototype is
        * sequentially inserted into the next filter. When all of the
        * input taps are used, the remaining filters in the filterbank
        * are filled out with 0's to make sure each filter has the same
        * number of taps.
        *
        * Each filter operates using the gr::filter::fir_filter_XXX
-       * classs of GNU Radio, which takes the input stream at
+       * class of GNU Radio, which takes the input stream at
        * <EM>i</EM> and performs the inner product calculation to
        * <EM>i+(n-1)</EM> where <EM>n</EM> is the number of filter
        * taps. To efficiently handle this in the GNU Radio structure,
@@ -86,11 +86,11 @@ namespace gr {
        * input is the gain of the filter, which we specify here as
        * unity.
        *
-       *      <B><EM>self._taps = filter.firdes.low_pass_2(1, fs, BW, TB,
-       *           attenuation_dB=ATT, window=filter.firdes.WIN_BLACKMAN_hARRIS)</EM></B>
+       *    <B><EM>self._taps = filter.firdes.low_pass_2(1, fs, BW, TB,
+       *       attenuation_dB=ATT, window=filter.firdes.WIN_BLACKMAN_hARRIS)</EM></B>
        *
        * More on the theory of polyphase filterbanks can be found in
-       * the following book.
+       * the following book:
        *
        *    <B><EM>f. harris, "Multirate Signal Processing for
        *       Communication Systems," Upper Saddle River, NJ:

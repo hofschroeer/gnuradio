@@ -24,9 +24,9 @@
 #include "config.h"
 #endif
 
-#include "audio_registry.h"
-#include <alsa_source.h>
-#include <alsa_impl.h>
+#include "../audio_registry.h"
+#include "alsa_source.h"
+#include "alsa_impl.h"
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
 #include <stdio.h>
@@ -472,7 +472,7 @@ namespace gr {
           }
           continue;  // try again
         }
-
+#ifdef ESTRPIPE
         else if(r == -ESTRPIPE) {   // h/w is suspended (whatever that means)
                                     // This is apparently related to power management
           d_nsuspends++;
@@ -482,7 +482,7 @@ namespace gr {
           }
           continue;   // try again
         }
-
+#endif
         else if(r < 0) {
           output_error_msg("snd_pcm_readi failed", r);
           return false;
@@ -503,7 +503,7 @@ namespace gr {
     }
 
     void
-    alsa_source::bail(const char *msg, int err) throw (std::runtime_error)
+    alsa_source::bail(const char *msg, int err)
     {
       output_error_msg(msg, err);
       throw std::runtime_error("audio_alsa_source");

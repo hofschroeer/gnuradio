@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2013 Free Software Foundation, Inc.
+ * Copyright 2012,2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -48,6 +48,17 @@ namespace gr {
      * Input stream: This expects a bit stream (0, 1 in the LSB of a
      * byte). It will display packed bytes but the display will have
      * to be autoscaled.
+     *
+     * The sink supports plotting streaming byte/char data or
+     * messages. The message port is named "in". The two modes cannot
+     * be used simultaneously, and \p nconnections should be set to 0
+     * when using the message mode. GRC handles this issue by
+     * providing the "Float Message" type that removes the streaming
+     * port(s).
+     *
+     * This sink can plot messages that contain either uniform vectors
+     * of byte/char values (pmt::is_{u,s}32vector) or PDUs where the
+     * data is a uniform vector of byte/char values.
      */
     class QTGUI_API time_raster_sink_b : virtual public sync_block
     {
@@ -86,22 +97,22 @@ namespace gr {
 
       virtual void set_update_time(double t) = 0;
       virtual void set_title(const std::string &title) = 0;
-      virtual void set_line_label(int which, const std::string &lable) = 0;
-      virtual void set_line_color(int which, const std::string &color) = 0;
-      virtual void set_line_width(int which, int width) = 0;
-      virtual void set_line_style(int which, Qt::PenStyle style) = 0;
-      virtual void set_line_marker(int which, QwtSymbol::Style marker) = 0;
-      virtual void set_line_alpha(int which, double alpha) = 0;
-      virtual void set_color_map(int which, const int color) = 0;
+      virtual void set_line_label(unsigned int which, const std::string &lable) = 0;
+      virtual void set_line_color(unsigned int which, const std::string &color) = 0;
+      virtual void set_line_width(unsigned int which, int width) = 0;
+      virtual void set_line_style(unsigned int which, Qt::PenStyle style) = 0;
+      virtual void set_line_marker(unsigned int which, QwtSymbol::Style marker) = 0;
+      virtual void set_line_alpha(unsigned int which, double alpha) = 0;
+      virtual void set_color_map(unsigned int which, const int color) = 0;
 
       virtual std::string title() = 0;
-      virtual std::string line_label(int which) = 0;
-      virtual std::string line_color(int which) = 0;
-      virtual int line_width(int which) = 0;
-      virtual int line_style(int which) = 0;
-      virtual int line_marker(int which) = 0;
-      virtual double line_alpha(int which) = 0;
-      virtual int color_map(int which) = 0;
+      virtual std::string line_label(unsigned int which) = 0;
+      virtual std::string line_color(unsigned int which) = 0;
+      virtual int line_width(unsigned int which) = 0;
+      virtual int line_style(unsigned int which) = 0;
+      virtual int line_marker(unsigned int which) = 0;
+      virtual double line_alpha(unsigned int which) = 0;
+      virtual int color_map(unsigned int which) = 0;
 
       virtual void set_size(int width, int height) = 0;
 
@@ -120,6 +131,7 @@ namespace gr {
       virtual void enable_menu(bool en) = 0;
       virtual void enable_grid(bool en) = 0;
       virtual void enable_autoscale(bool en) = 0;
+      virtual void enable_axis_labels(bool en=true) = 0;
       virtual void reset() = 0;
 
       QApplication *d_qApplication;

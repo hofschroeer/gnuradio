@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2002, 2015 Free Software Foundation, Inc.
+ * Copyright 2002,2015,2018 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -39,27 +39,34 @@
 #include <config.h>
 #endif
 
-#include <math.h>
 #include <gnuradio/random.h>
+#include <gnuradio/math.h>
+
+#include <cmath>
 
 namespace gr {
 
-  random::random(unsigned int seed)
+  random::random(unsigned int seed, int min_integer, int max_integer)
   {
     d_gauss_stored = false; // set gasdev (gauss distributed numbers) on calculation state
 
-    // Setup random number generator
-    d_rng = new boost::mt19937;
+    // Setup random number generators
+    d_rng = new boost::mt19937; // random numbers are generated here.
+    d_uniform = new boost::uniform_real<float>; // map random number to distribution
+    d_integer_dis = new boost::uniform_int<>(0, 1); // another "mapper"
+    d_generator = NULL; // MUST be reinstantiated on every call to reseed.
+    d_integer_generator = NULL; // MUST be reinstantiated on everytime d_rng or d_integer_dis is changed.
     reseed(seed); // set seed for random number generator
-    d_uniform = new boost::uniform_real<float>;
-    d_generator = new boost::variate_generator<boost::mt19937&, boost::uniform_real<float> > (*d_rng,*d_uniform); // create number generator in [0,1) from boost.random
+    set_integer_limits(min_integer, max_integer);
   }
 
   random::~random()
   {
       delete d_rng;
       delete d_uniform;
+      delete d_integer_dis;
       delete d_generator;
+      delete d_integer_generator;
   }
 
   /*
@@ -68,9 +75,35 @@ namespace gr {
   void
   random::reseed(unsigned int seed)
   {
-    if(seed==0) d_seed = static_cast<unsigned int>(std::time(0));
-    else d_seed = seed;
-    d_rng->seed(d_seed);
+    d_seed = seed;
+    if (d_seed == 0){
+      d_rng->seed();
+    } else {
+      d_rng->seed(d_seed);
+    }
+    // reinstantiate generators. Otherwise reseed doesn't take effect.
+    delete d_generator;
+    d_generator = new boost::variate_generator<boost::mt19937&, boost::uniform_real<float> > (*d_rng,*d_uniform); // create number generator in [0,1) from boost.random
+    delete d_integer_generator;
+    d_integer_generator = new boost::variate_generator<boost::mt19937&, boost::uniform_int<> >(*d_rng, *d_integer_dis);
+  }
+
+  void
+  random::set_integer_limits(const int minimum, const int maximum){
+    // boost expects integer limits defined as [minimum, maximum] which is unintuitive.
+    // use the expected half open interval behavior! [minimum, maximum)!
+    delete d_integer_generator;
+    delete d_integer_dis;
+    d_integer_dis = new boost::uniform_int<>(minimum, maximum - 1);
+    d_integer_generator = new boost::variate_generator<boost::mt19937&, boost::uniform_int<> >(*d_rng, *d_integer_dis);
+  }
+
+  /*!
+   * Uniform random integers in the range set by 'set_integer_limits' [min, max).
+   */
+  int
+  random::ran_int(){
+    return (*d_integer_generator)();
   }
 
   /*
@@ -100,21 +133,22 @@ namespace gr {
               x = 2.0*ran1()-1.0;
               y = 2.0*ran1()-1.0;
               s = x*x+y*y;
-          }while(not(s<1.0));
+          }while(s >= 1.0f || s == 0.0f);
           d_gauss_stored = true;
-          d_gauss_value = x*sqrt(-2.0*log(s)/s);
-          return y*sqrt(-2.0*log(s)/s);
+          d_gauss_value = x*sqrtf(-2.0*logf(s)/s);
+          return y*sqrtf(-2.0*logf(s)/s);
       }
   }
 
   float
   random::laplacian()
   {
-    float z = ran1()-0.5;
-    if(z>0) return -log(1-2*z);
-    else return log(1+2*z);
+          float z = ran1();
+          if (z > 0.5f){
+                  return -logf(2.0f * (1.0f - z) );
+          }
+          return logf(2 * z);
   }
-
   /*
    * Copied from The KC7WW / OH2BNS Channel Simulator
    * FIXME Need to check how good this is at some point
@@ -123,7 +157,7 @@ namespace gr {
   float
   random::impulse(float factor = 5)
   {
-    float z = -M_SQRT2 * log(ran1());
+    float z = -GR_M_SQRT2 * logf(ran1());
     if(fabsf(z) <= factor)
       return 0.0;
     else
@@ -139,7 +173,7 @@ namespace gr {
   float
   random::rayleigh()
   {
-    return sqrt(-2.0 * log(ran1()));
+    return sqrtf(-2.0 * logf(ran1()));
   }
 
 } /* namespace gr */

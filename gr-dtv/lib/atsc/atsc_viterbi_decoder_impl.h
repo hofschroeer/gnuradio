@@ -49,7 +49,6 @@ namespace gr {
     class atsc_viterbi_decoder_impl : public atsc_viterbi_decoder
     {
     private:
-      int last_start;
       typedef interleaver_fifo<unsigned char> fifo_t;
 
       static const int SEGMENT_SIZE = ATSC_MPEG_RS_ENCODED_LENGTH;	// 207
@@ -63,7 +62,11 @@ namespace gr {
       atsc_viterbi_decoder_impl();
       ~atsc_viterbi_decoder_impl();
 
+      void setup_rpc();
+
       void reset();
+
+      std::vector<float> decoder_metrics() const;
 
       virtual int work(int noutput_items,
                        gr_vector_const_void_star &input_items,

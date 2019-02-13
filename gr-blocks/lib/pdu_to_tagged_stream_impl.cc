@@ -43,19 +43,15 @@ namespace gr {
                             io_signature::make(1, 1, pdu::itemsize(type)),
                             tsb_tag_key),
         d_itemsize(pdu::itemsize(type)),
-        d_type(type),
         d_curr_len(0)
     {
-      message_port_register_in(PDU_PORT_ID);
+      message_port_register_in(pdu::pdu_port_id());
     }
 
     int pdu_to_tagged_stream_impl::calculate_output_stream_length(const gr_vector_int &)
     {
       if (d_curr_len == 0) {
-          /* FIXME: This blocking call is far from ideal but is the best we
-	   *        can do at the moment
-	   */
-        pmt::pmt_t msg(delete_head_blocking(PDU_PORT_ID, 100));
+        pmt::pmt_t msg(delete_head_nowait(pdu::pdu_port_id()));
         if (msg.get() == NULL) {
           return 0;
         }
@@ -65,7 +61,8 @@ namespace gr {
 
         d_curr_meta = pmt::car(msg);
         d_curr_vect = pmt::cdr(msg);
-        d_curr_len = pmt::length(d_curr_vect);
+        // do not assume the length of  PMT is in items (e.g.: from socket_pdu)
+        d_curr_len = pmt::blob_length(d_curr_vect)/d_itemsize;
       }
 
       return d_curr_len;

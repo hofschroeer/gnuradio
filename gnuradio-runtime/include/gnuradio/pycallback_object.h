@@ -42,17 +42,17 @@ public:
   }
 };
 
-/* template specializations for vectors that cant use pmt::mp() */
+/* template specializations for vectors that can't use pmt::mp() */
 template<>
 pmt::pmt_t pmt_assist<std::vector<float> >::make(std::vector<float> _val)
 {
-  return pmt::init_f32vector(_val.size(), &_val[0]);
+  return pmt::init_f32vector(_val.size(), _val);
 }
 
 template<>
 pmt::pmt_t pmt_assist<std::vector<gr_complex> >::make(std::vector<gr_complex> _val)
 {
-  return pmt::init_c32vector(_val.size(), &_val[0]);
+  return pmt::init_c32vector(_val.size(), _val);
 }
 
 template <class myType> class pycallback_object

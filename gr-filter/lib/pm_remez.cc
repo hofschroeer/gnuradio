@@ -575,7 +575,7 @@ namespace gr {
      *=======
      * Calculates the optimal (in the Chebyshev/minimax sense)
      * FIR filter impulse response given a set of band edges,
-     * the desired reponse on those bands, and the weight given to
+     * the desired response on those bands, and the weight given to
      * the error in those bands.
      *
      * INPUT:
@@ -776,7 +776,8 @@ namespace gr {
 	     const std::vector<double> &arg_weight,
 	     const std::string filter_type,
 	     int grid_density
-	     ) throw (std::runtime_error)
+	     )
+      noexcept(false)
     {
       int numtaps = order + 1;
       if(numtaps < 4)

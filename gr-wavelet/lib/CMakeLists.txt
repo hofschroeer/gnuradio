@@ -26,14 +26,11 @@ include_directories(
     ${GR_WAVELET_INCLUDE_DIRS}
     ${GR_BLOCKS_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
-    ${LOG4CXX_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${GSL_INCLUDE_DIRS}
 )
 
-# is this correct?
 link_directories(${GR_WAVELET_LIBRARY_DIRS})
-link_directories(${LOG4CXX_LIBRARY_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 link_directories(${GSL_LIBRARY_DIRS})
 add_definitions(${GSL_DEFINITIONS})
@@ -41,9 +38,6 @@ add_definitions(${GSL_DEFINITIONS})
 if(ENABLE_GR_CTRLPORT)
   ADD_DEFINITIONS(-DGR_CTRLPORT)
 endif(ENABLE_GR_CTRLPORT)
-
-include_directories(${LOG4CPP_INCLUDE_DIRS})
-link_directories(${LOG4CPP_LIBRARY_DIRS})
 
 ########################################################################
 # Setup library
@@ -74,7 +68,6 @@ list(APPEND wavelet_libs
     ${Boost_LIBRARIES}
     ${WAVELET_LIBRARIES}
     ${GSL_LIBRARIES}
-    ${LOG4CPP_LIBRARIES}
 )
 
 add_library(gnuradio-wavelet SHARED ${gr_wavelet_sources})
@@ -85,9 +78,8 @@ if(CMAKE_COMPILER_IS_GNUCC AND NOT APPLE)
     SET_TARGET_PROPERTIES(gnuradio-wavelet PROPERTIES LINK_FLAGS "-Wl,--no-as-needed")
 endif()
 
-GR_LIBRARY_FOO(gnuradio-wavelet RUNTIME_COMPONENT "wavelet_runtime" DEVEL_COMPONENT "wavelet_devel")
+GR_LIBRARY_FOO(gnuradio-wavelet)
 add_dependencies(gnuradio-wavelet
-  wavelet_generated_includes wavelet_generated_swigs
   gnuradio-runtime)
 
 if(ENABLE_STATIC_LIBS)
@@ -104,7 +96,7 @@ if(ENABLE_STATIC_LIBS)
 
   add_library(gnuradio-wavelet_static STATIC ${gr_wavelet_sources})
 
-  add_dependencies(gnuradio-wavelet_static wavelet_generated_includes
+  add_dependencies(gnuradio-wavelet_static
     gnuradio-runtime_static)
 
   if(NOT WIN32)
@@ -113,6 +105,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-wavelet_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "wavelet_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

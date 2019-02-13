@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2011-2013 Free Software Foundation, Inc.
+ * Copyright 2011-2013,2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,12 +25,15 @@
 #endif
 
 #include "time_sink_c_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
-#include <string.h>
-#include <volk/volk.h>
 #include <gnuradio/fft/fft.h>
+
+#include <volk/volk.h>
 #include <qwt_symbol.h>
+
+#include <string.h>
 
 namespace gr {
   namespace qtgui {
@@ -38,7 +41,7 @@ namespace gr {
     time_sink_c::sptr
     time_sink_c::make(int size, double samp_rate,
 		      const std::string &name,
-		      int nconnections,
+		      unsigned int nconnections,
 		      QWidget *parent)
     {
       return gnuradio::get_initial_sptr
@@ -47,14 +50,19 @@ namespace gr {
 
     time_sink_c_impl::time_sink_c_impl(int size, double samp_rate,
 				       const std::string &name,
-				       int nconnections,
+				       unsigned int nconnections,
 				       QWidget *parent)
       : sync_block("time_sink_c",
-                   io_signature::make(nconnections, nconnections, sizeof(gr_complex)),
+                   io_signature::make(0, nconnections, sizeof(gr_complex)),
                    io_signature::make(0, 0, 0)),
 	d_size(size), d_buffer_size(2*size), d_samp_rate(samp_rate), d_name(name),
-	d_nconnections(2*nconnections), d_parent(parent)
+    d_nconnections(2*nconnections),
+    d_tag_key(pmt::mp("tags")),
+    d_parent(parent)
     {
+      if(nconnections > 12)
+        throw std::runtime_error("time_sink_c only supports up to 12 inputs");
+
       // Required now for Qt; argc must be greater than 0 and argv
       // must have at least one valid character. Must be valid through
       // life of the qApplication:
@@ -65,13 +73,20 @@ namespace gr {
 
       d_main_gui = NULL;
 
-      for(int n = 0; n < d_nconnections; n++) {
+      // setup PDU handling input port
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
+                      boost::bind(&time_sink_c_impl::handle_pdus, this, _1));
+
+      // +2 for the PDU message buffers
+      for(unsigned int n = 0; n < d_nconnections+2; n++) {
 	d_buffers.push_back((double*)volk_malloc(d_buffer_size*sizeof(double),
 						 volk_get_alignment()));
 	memset(d_buffers[n], 0, d_buffer_size*sizeof(double));
       }
 
-      for(int n = 0; n < d_nconnections/2; n++) {
+      // We don't use cbuffers with the PDU message handling capabilities.
+      for(unsigned int n = 0; n < d_nconnections/2; n++) {
 	d_cbuffers.push_back((gr_complex*)volk_malloc(d_buffer_size*sizeof(gr_complex),
                                                       volk_get_alignment()));
 	memset(d_cbuffers[n], 0, d_buffer_size*sizeof(gr_complex));
@@ -99,10 +114,10 @@ namespace gr {
         d_main_gui->close();
 
       // d_main_gui is a qwidget destroyed with its parent
-      for(int n = 0; n < d_nconnections; n++) {
+      for(unsigned int n = 0; n < d_nconnections+2; n++) {
 	volk_free(d_buffers[n]);
       }
-      for(int n = 0; n < d_nconnections/2; n++) {
+      for(unsigned int n = 0; n < d_nconnections/2; n++) {
         volk_free(d_cbuffers[n]);
       }
 
@@ -112,7 +127,7 @@ namespace gr {
     bool
     time_sink_c_impl::check_topology(int ninputs, int noutputs)
     {
-      return 2*ninputs == d_nconnections;
+      return (unsigned int) (2*ninputs) == d_nconnections;
     }
 
     void
@@ -122,7 +137,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -130,13 +145,10 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
-      d_main_gui = new TimeDisplayForm(d_nconnections, d_parent);
+      unsigned int numplots = (d_nconnections > 0) ? d_nconnections : 2;
+      d_main_gui = new TimeDisplayForm(numplots, d_parent);
       d_main_gui->setNPoints(d_size);
       d_main_gui->setSampleRate(d_samp_rate);
 
@@ -205,37 +217,37 @@ namespace gr {
     }
 
     void
-    time_sink_c_impl::set_line_label(int which, const std::string &label)
+    time_sink_c_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    time_sink_c_impl::set_line_color(int which, const std::string &color)
+    time_sink_c_impl::set_line_color(unsigned int which, const std::string &color)
     {
       d_main_gui->setLineColor(which, color.c_str());
     }
 
     void
-    time_sink_c_impl::set_line_width(int which, int width)
+    time_sink_c_impl::set_line_width(unsigned int which, int width)
     {
       d_main_gui->setLineWidth(which, width);
     }
 
     void
-    time_sink_c_impl::set_line_style(int which, int style)
+    time_sink_c_impl::set_line_style(unsigned int which, int style)
     {
       d_main_gui->setLineStyle(which, (Qt::PenStyle)style);
     }
 
     void
-    time_sink_c_impl::set_line_marker(int which, int marker)
+    time_sink_c_impl::set_line_marker(unsigned int which, int marker)
     {
       d_main_gui->setLineMarker(which, (QwtSymbol::Style)marker);
     }
 
     void
-    time_sink_c_impl::set_line_alpha(int which, double alpha)
+    time_sink_c_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setMarkerAlpha(which, (int)(255.0*alpha));
     }
@@ -288,37 +300,37 @@ namespace gr {
     }
 
     std::string
-    time_sink_c_impl::line_label(int which)
+    time_sink_c_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     std::string
-    time_sink_c_impl::line_color(int which)
+    time_sink_c_impl::line_color(unsigned int which)
     {
       return d_main_gui->lineColor(which).toStdString();
     }
 
     int
-    time_sink_c_impl::line_width(int which)
+    time_sink_c_impl::line_width(unsigned int which)
     {
       return d_main_gui->lineWidth(which);
     }
 
     int
-    time_sink_c_impl::line_style(int which)
+    time_sink_c_impl::line_style(unsigned int which)
     {
       return d_main_gui->lineStyle(which);
     }
 
     int
-    time_sink_c_impl::line_marker(int which)
+    time_sink_c_impl::line_marker(unsigned int which)
     {
       return d_main_gui->lineMarker(which);
     }
 
     double
-    time_sink_c_impl::line_alpha(int which)
+    time_sink_c_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->markerAlpha(which))/255.0;
     }
@@ -335,14 +347,14 @@ namespace gr {
         d_buffer_size = 2*d_size;
 
 	// Resize buffers and replace data
-	for(int n = 0; n < d_nconnections; n++) {
+	for(unsigned int n = 0; n < d_nconnections+2; n++) {
 	  volk_free(d_buffers[n]);
 	  d_buffers[n] = (double*)volk_malloc(d_buffer_size*sizeof(double),
                                               volk_get_alignment());
 	  memset(d_buffers[n], 0, d_buffer_size*sizeof(double));
 	}
 
-	for(int n = 0; n < d_nconnections/2; n++) {
+	for(unsigned int n = 0; n < d_nconnections/2; n++) {
 	  volk_free(d_cbuffers[n]);
 	  d_cbuffers[n] = (gr_complex*)volk_malloc(d_buffer_size*sizeof(gr_complex),
                                                    volk_get_alignment());
@@ -422,21 +434,29 @@ namespace gr {
     }
 
     void
-    time_sink_c_impl::enable_tags(int which, bool en)
+    time_sink_c_impl::enable_tags(unsigned int which, bool en)
     {
-      if(which == -1) {
-        for(int n = 0; n < d_nconnections; n++) {
-          d_main_gui->setTagMenu(n, en);
-        }
-      }
-      else
         d_main_gui->setTagMenu(which, en);
+    }
+
+    void
+    time_sink_c_impl::enable_tags(bool en)
+    {
+            for(unsigned int n = 0; n < d_nconnections; ++n) {
+                    d_main_gui->setTagMenu(n, en);
+            }
+    }
+
+    void 
+    time_sink_c_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
     }
 
     void
     time_sink_c_impl::disable_legend()
     {
-      d_main_gui->disableLegend();
+        d_main_gui->disableLegend();
     }
 
     void
@@ -449,7 +469,7 @@ namespace gr {
     void
     time_sink_c_impl::_reset()
     {
-      int n;
+      unsigned int n;
       if(d_trigger_delay) {
         for(n = 0; n < d_nconnections/2; n++) {
           // Move the tail of the buffers to the front. This section
@@ -553,12 +573,15 @@ namespace gr {
                         nr, nr + nitems + 1,
                         d_trigger_tag_key);
       if(tags.size() > 0) {
-        d_triggered = true;
         trigger_index = tags[0].offset - nr;
-        d_start = d_index + trigger_index - d_trigger_delay - 1;
-        d_end = d_start + d_size;
-        d_trigger_count = 0;
-        _adjust_tags(-d_start);
+        int start = d_index + trigger_index - d_trigger_delay - 1;
+        if (start >= 0) {
+            d_triggered = true;
+            d_start = start;
+            d_end = d_start + d_size;
+            d_trigger_count = 0;
+            _adjust_tags(-d_start);
+        }
       }
     }
 
@@ -567,7 +590,7 @@ namespace gr {
     {
       int trigger_index;
       const gr_complex *in = (const gr_complex*)inputs[d_trigger_channel/2];
-      for(trigger_index = 0; trigger_index < nitems; trigger_index++) {
+      for(trigger_index = 0; trigger_index < nitems - 1; trigger_index++) {
         d_trigger_count++;
 
         // Test if trigger has occurred based on the input stream,
@@ -614,7 +637,7 @@ namespace gr {
 			   gr_vector_const_void_star &input_items,
 			   gr_vector_void_star &output_items)
     {
-      int n=0;
+      unsigned int n=0;
       const gr_complex *in;
 
       _npoints_resize();
@@ -644,7 +667,7 @@ namespace gr {
 
         uint64_t nr = nitems_read(n);
         std::vector<gr::tag_t> tags;
-        get_tags_in_range(tags, n, nr, nr + nitems + 1);
+        get_tags_in_range(tags, n, nr, nr + nitems);
         for(size_t t = 0; t < tags.size(); t++) {
           tags[t].offset = tags[t].offset - nr + (d_index-d_start-1);
         }
@@ -677,6 +700,77 @@ namespace gr {
       }
 
       return nitems;
+    }
+
+    void
+    time_sink_c_impl::handle_pdus(pmt::pmt_t msg)
+    {
+      size_t len;
+      pmt::pmt_t dict, samples;
+      std::vector< std::vector<gr::tag_t> > t(1);
+
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("time_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
+
+      // add tag info if it is present in metadata
+      if(pmt::is_dict(dict)){
+        if(pmt::dict_has_key(dict, d_tag_key)){
+            d_tags.clear();
+            pmt::pmt_t tags = pmt::dict_ref(dict, d_tag_key, pmt::PMT_NIL);
+            int len = pmt::length(tags);
+            for(int i=0; i<len; i++){
+                // get tag info from list
+                pmt::pmt_t tup = pmt::vector_ref(tags, i);
+                int tagval = pmt::to_long(pmt::tuple_ref(tup,0));
+                pmt::pmt_t k = pmt::tuple_ref(tup,1);
+                pmt::pmt_t v = pmt::tuple_ref(tup,2);
+
+                // add the tag
+                t[0].push_back( gr::tag_t() );
+                t[0][t[0].size()-1].offset = tagval;
+                t[0][t[0].size()-1].key = k;
+                t[0][t[0].size()-1].value = v;
+                t[0][t[0].size()-1].srcid = pmt::PMT_NIL;
+                }
+            }
+        }
+
+      len = pmt::length(samples);
+
+      const gr_complex *in;
+      if(pmt::is_c32vector(samples)) {
+        in = (const gr_complex*)pmt::c32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("time_sink_c: unknown data type "
+                                 "of samples; must be complex.");
+      }
+
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
+
+        set_nsamps(len);
+
+        volk_32fc_deinterleave_64f_x2(d_buffers[2*d_nconnections+0],
+                                      d_buffers[2*d_nconnections+1],
+                                      in, len);
+
+        d_qApplication->postEvent(d_main_gui,
+                                  new TimeUpdateEvent(d_buffers, len, t));
+      }
     }
 
   } /* namespace qtgui */

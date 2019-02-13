@@ -170,11 +170,17 @@ TimeDomainDisplayPlot::TimeDomainDisplayPlot(int nplots, QWidget* parent)
   colors << QColor(Qt::blue) << QColor(Qt::red) << QColor(Qt::green)
 	 << QColor(Qt::black) << QColor(Qt::cyan) << QColor(Qt::magenta)
 	 << QColor(Qt::yellow) << QColor(Qt::gray) << QColor(Qt::darkRed)
+	 << QColor(Qt::darkGreen) << QColor(Qt::darkBlue) << QColor(Qt::darkGray)
+	 // cycle through all colors again to increase time_sink_f input limit
+	 // from 12 to 24, otherwise you get a segfault
+	 << QColor(Qt::blue) << QColor(Qt::red) << QColor(Qt::green)
+	 << QColor(Qt::black) << QColor(Qt::cyan) << QColor(Qt::magenta)
+	 << QColor(Qt::yellow) << QColor(Qt::gray) << QColor(Qt::darkRed)
 	 << QColor(Qt::darkGreen) << QColor(Qt::darkBlue) << QColor(Qt::darkGray);
-
+	 
   // Setup dataPoints and plot vectors
   // Automatically deleted when parent is deleted
-  for(int i = 0; i < d_nplots; i++) {
+  for(unsigned int i = 0; i < d_nplots; ++i) {
     d_ydata.push_back(new double[d_numPoints]);
     memset(d_ydata[i], 0x0, d_numPoints*sizeof(double));
 
@@ -219,7 +225,7 @@ TimeDomainDisplayPlot::TimeDomainDisplayPlot(int nplots, QWidget* parent)
 
 TimeDomainDisplayPlot::~TimeDomainDisplayPlot()
 {
-  for(int i = 0; i < d_nplots; i++)
+  for(unsigned int i = 0; i < d_nplots; ++i)
     delete [] d_ydata[i];
   delete[] d_xdata;
 
@@ -246,7 +252,7 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
 	delete[] d_xdata;
 	d_xdata = new double[d_numPoints];
 
-	for(int i = 0; i < d_nplots; i++) {
+	for(unsigned int i = 0; i < d_nplots; ++i) {
 	  delete[] d_ydata[i];
 	  d_ydata[i] = new double[d_numPoints];
 
@@ -260,7 +266,7 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
 	_resetXAxisPoints();
       }
 
-      for(int i = 0; i < d_nplots; i++) {
+      for(unsigned int i = 0; i < d_nplots; ++i) {
 	if(d_semilogy) {
 	  for(int n = 0; n < numDataPoints; n++)
 	    d_ydata[i][n] = fabs(dataPoints[i][n]);
@@ -271,7 +277,7 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
       }
 
       // Detach and delete any tags that were plotted last time
-      for(int n = 0; n < d_nplots; n++) {
+      for(unsigned int n = 0; n < d_nplots; ++n) {
         for(size_t i = 0; i < d_tag_markers[n].size(); i++) {
           d_tag_markers[n][i]->detach();
           delete d_tag_markers[n][i];
@@ -284,12 +290,12 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
       // split here into two stream.
       if(tags.size() > 0) {
         bool cmplx = false;
-        int mult = (int)d_nplots / (int)tags.size();
+        unsigned int mult = d_nplots / tags.size();
         if(mult == 2)
           cmplx = true;
 
         std::vector< std::vector<gr::tag_t> >::const_iterator tag = tags.begin();
-        for(int i = 0; i < d_nplots; i+=mult) {
+        for(unsigned int i = 0; i < d_nplots; i += mult) {
           std::vector<gr::tag_t>::const_iterator t;
           for(t = tag->begin(); t != tag->end(); t++) {
             uint64_t offset = (*t).offset;
@@ -343,9 +349,7 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
               m->setXValue(sample_offset);
               m->setYValue(yval);
 
-              QBrush brush;
-              brush.setColor(QColor(0xC8, 0x2F, 0x1F));
-              brush.setStyle(Qt::SolidPattern);
+              QBrush brush(getTagBackgroundColor(), getTagBackgroundStyle());
 
               QPen pen;
               pen.setColor(Qt::black);
@@ -367,8 +371,10 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
 #else
               m->setSymbol(sym);
 #endif
+              QwtText tag_label(s.str().c_str());
+              tag_label.setColor(getTagTextColor());
+              m->setLabel(tag_label);
 
-              m->setLabel(QwtText(s.str().c_str()));
               m->attach(this);
 
               if(!(show && d_tag_markers_en[which])) {
@@ -402,7 +408,7 @@ TimeDomainDisplayPlot::plotNewData(const std::vector<double*> dataPoints,
 
       if(d_autoscale_state) {
 	double bottom=1e20, top=-1e20;
-	for(int n = 0; n < d_nplots; n++) {
+	for(unsigned int n = 0; n < d_nplots; ++n) {
 	  for(int64_t point = 0; point < numDataPoints; point++) {
 	    if(d_ydata[n][point] < bottom) {
 	      bottom = d_ydata[n][point];
@@ -428,7 +434,7 @@ void
 TimeDomainDisplayPlot::legendEntryChecked(QwtPlotItem* plotItem, bool on)
 {
   // When line is turned on/off, immediately show/hide tag markers
-  for(int n = 0; n < d_nplots; n++) {
+  for(unsigned int n = 0; n < d_nplots; ++n) {
     if(plotItem == d_plot_curve[n]) {
       for(size_t i = 0; i < d_tag_markers[n].size(); i++) {
         if(!(!on && d_tag_markers_en[n]))
@@ -543,13 +549,13 @@ void
 TimeDomainDisplayPlot::stemPlot(bool en)
 {
   if(en) {
-    for(int i = 0; i < d_nplots; i++) {
+    for(unsigned int i = 0; i < d_nplots; ++i) {
       d_plot_curve[i]->setStyle(QwtPlotCurve::Sticks);
       setLineMarker(i, QwtSymbol::Ellipse);
     }
   }
   else {
-    for(int i = 0; i < d_nplots; i++) {
+    for(unsigned int i = 0; i < d_nplots; ++i) {
       d_plot_curve[i]->setStyle(QwtPlotCurve::Lines);
       setLineMarker(i, QwtSymbol::NoSymbol);
     }
@@ -601,7 +607,7 @@ TimeDomainDisplayPlot::setSemilogy(bool en)
 }
 
 void
-TimeDomainDisplayPlot::enableTagMarker(int which, bool en)
+TimeDomainDisplayPlot::enableTagMarker(unsigned int which, bool en)
 {
   if((size_t)which < d_tag_markers_en.size())
     d_tag_markers_en[which] = en;

@@ -26,14 +26,12 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${GR_AUDIO_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
-    ${LOG4CPP_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
 )
 
 link_directories(${Boost_LIBRARY_DIRS})
-link_directories(${LOG4CPP_LIBRARY_DIRS})
 
-list(APPEND gr_audio_libs gnuradio-runtime ${Boost_LIBRARIES} ${LOG4CPP_LIBRARIES})
+list(APPEND gr_audio_libs gnuradio-runtime ${Boost_LIBRARIES})
 list(APPEND gr_audio_sources audio_registry.cc)
 list(APPEND gr_audio_confs ${CMAKE_CURRENT_SOURCE_DIR}/gr-audio.conf)
 
@@ -46,7 +44,7 @@ endif(ENABLE_GR_CTRLPORT)
 ########################################################################
 find_package(ALSA)
 
-if(ALSA_FOUND)
+if((ALSA_FOUND) AND NOT (CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD") AND NOT (CMAKE_SYSTEM_NAME STREQUAL GNU))
 
     add_definitions(-DALSA_FOUND)
     GR_APPEND_SUBCOMPONENT("alsa")
@@ -61,7 +59,7 @@ if(ALSA_FOUND)
     )
     list(APPEND gr_audio_confs ${CMAKE_CURRENT_SOURCE_DIR}/alsa/gr-audio-alsa.conf)
 
-endif(ALSA_FOUND)
+endif((ALSA_FOUND) AND NOT (CMAKE_SYSTEM_NAME STREQUAL "kFreeBSD") AND NOT (CMAKE_SYSTEM_NAME STREQUAL GNU))
 
 ########################################################################
 ## OSS Support
@@ -201,9 +199,9 @@ endif(WIN32)
 ########################################################################
 add_library(gnuradio-audio SHARED ${gr_audio_sources})
 target_link_libraries(gnuradio-audio ${gr_audio_libs})
-GR_LIBRARY_FOO(gnuradio-audio RUNTIME_COMPONENT "audio_runtime" DEVEL_COMPONENT "audio_devel")
+GR_LIBRARY_FOO(gnuradio-audio)
 
-install(FILES ${gr_audio_confs} DESTINATION ${GR_PREFSDIR} COMPONENT "audio_runtime")
+install(FILES ${gr_audio_confs} DESTINATION ${GR_PREFSDIR})
 
 if(ENABLE_STATIC_LIBS)
   if(ENABLE_GR_CTRLPORT)
@@ -225,6 +223,6 @@ if(ENABLE_STATIC_LIBS)
   endif(NOT WIN32)
 
   install(TARGETS gnuradio-audio_static
-    ARCHIVE DESTINATION lib${LIB_SUFFIX} COMPONENT "audio_devel"   # .lib file
+    ARCHIVE DESTINATION lib${LIB_SUFFIX} # .lib file
     )
 endif(ENABLE_STATIC_LIBS)

@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2014,2015 Free Software Foundation, Inc.
+ * Copyright 2014,2015,2016 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -47,6 +47,7 @@
 #include "gnuradio/dtv/dvbt_config.h"
 #include "gnuradio/dtv/dvbt2_config.h"
 #include "gnuradio/dtv/dvbs2_config.h"
+#include "gnuradio/dtv/catv_config.h"
 #include "gnuradio/dtv/dvb_bbheader_bb.h"
 #include "gnuradio/dtv/dvb_bbscrambler_bb.h"
 #include "gnuradio/dtv/dvb_bch_bb.h"
@@ -79,6 +80,11 @@
 #include "gnuradio/dtv/dvbt_convolutional_deinterleaver.h"
 #include "gnuradio/dtv/dvbt_reed_solomon_dec.h"
 #include "gnuradio/dtv/dvbt_energy_descramble.h"
+#include "gnuradio/dtv/catv_transport_framing_enc_bb.h"
+#include "gnuradio/dtv/catv_reed_solomon_enc_bb.h"
+#include "gnuradio/dtv/catv_randomizer_bb.h"
+#include "gnuradio/dtv/catv_frame_sync_enc_bb.h"
+#include "gnuradio/dtv/catv_trellis_enc_bb.h"
 %}
 
 %include "gnuradio/dtv/atsc_deinterleaver.h"
@@ -100,6 +106,7 @@
 %include "gnuradio/dtv/dvbt_config.h"
 %include "gnuradio/dtv/dvbt2_config.h"
 %include "gnuradio/dtv/dvbs2_config.h"
+%include "gnuradio/dtv/catv_config.h"
 %include "gnuradio/dtv/dvb_bbheader_bb.h"
 %include "gnuradio/dtv/dvb_bbscrambler_bb.h"
 %include "gnuradio/dtv/dvb_bch_bb.h"
@@ -132,6 +139,11 @@
 %include "gnuradio/dtv/dvbt_convolutional_deinterleaver.h"
 %include "gnuradio/dtv/dvbt_reed_solomon_dec.h"
 %include "gnuradio/dtv/dvbt_energy_descramble.h"
+%include "gnuradio/dtv/catv_transport_framing_enc_bb.h"
+%include "gnuradio/dtv/catv_reed_solomon_enc_bb.h"
+%include "gnuradio/dtv/catv_randomizer_bb.h"
+%include "gnuradio/dtv/catv_frame_sync_enc_bb.h"
+%include "gnuradio/dtv/catv_trellis_enc_bb.h"
 
 GR_SWIG_BLOCK_MAGIC2(dtv, atsc_deinterleaver);
 GR_SWIG_BLOCK_MAGIC2(dtv, atsc_depad);
@@ -180,3 +192,8 @@ GR_SWIG_BLOCK_MAGIC2(dtv, dvbt_viterbi_decoder);
 GR_SWIG_BLOCK_MAGIC2(dtv, dvbt_convolutional_deinterleaver);
 GR_SWIG_BLOCK_MAGIC2(dtv, dvbt_reed_solomon_dec);
 GR_SWIG_BLOCK_MAGIC2(dtv, dvbt_energy_descramble);
+GR_SWIG_BLOCK_MAGIC2(dtv, catv_transport_framing_enc_bb);
+GR_SWIG_BLOCK_MAGIC2(dtv, catv_reed_solomon_enc_bb);
+GR_SWIG_BLOCK_MAGIC2(dtv, catv_randomizer_bb);
+GR_SWIG_BLOCK_MAGIC2(dtv, catv_frame_sync_enc_bb);
+GR_SWIG_BLOCK_MAGIC2(dtv, catv_trellis_enc_bb);

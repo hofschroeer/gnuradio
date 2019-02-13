@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2017 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ namespace gr {
      * \ingroup dtv
      *
      * \details
-     * Input: 188-byte MPEG-2 Transport Stream packets.
+     * Input: 188-byte MPEG-2 Transport Stream packets. \n
      * Output: Variable length FEC baseband frames (BBFRAME). The output frame
      *         length is based on the FEC rate.
      */
@@ -49,7 +49,7 @@ namespace gr {
        * \brief Create a baseband header formatter.
        *
        * \param standard DVB standard (DVB-S2 or DVB-T2).
-       * \param framesize FEC frame size (normal or short).
+       * \param framesize FEC frame size (normal, medium or short).
        * \param rate FEC code rate.
        * \param rolloff DVB-S2 root-raised-cosine filter roll-off.
        * \param mode DVB-T2 input processing mode.

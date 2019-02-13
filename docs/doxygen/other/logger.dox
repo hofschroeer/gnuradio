@@ -1,3 +1,12 @@
+# Copyright (C) 2017 Free Software Foundation, Inc.
+#
+# Permission is granted to copy, distribute and/or modify this document
+# under the terms of the GNU Free Documentation License, Version 1.3
+# or any later version published by the Free Software Foundation;
+# with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+# A copy of the license is included in the section entitled "GNU
+# Free Documentation License".
+
 /*! \page page_logger Logging
 
 \section logging Logging
@@ -7,12 +16,6 @@ information to be printed to the console or a file. The logger derives
 from log4cpp (http://log4cpp.sourceforge.net/) which is readily
 available in most Linux distributions. This is an optional dependency
 and GNU Radio will work without it.
-
-When configuring GNU Radio, the -DENABLE_GR_LOG=On|Off option to cmake
-will allow the user to toggle use of the logger on and off. The logger
-defaults to "on" and will use log4cpp if it is available. If log4cpp
-is not found, the default logging will output to standard output or
-standard error, depending on the level of the log message.
 
 Logging is useful for blocks to print out certain amounts of data at
 different levels. These levels are:
@@ -202,6 +205,24 @@ except we would use "gr_log_debug." in the GR_LOG_GETLOGGER call):
 This creates a pointer called LOG (which is instantiated as a
 log4cpp:LoggerPtr in the macro) that we can now use locally as the
 input to our logging macros like 'GR_LOG_INFO(LOG, "message")'.
+
+\subsection using_logging Using Logging in Out of Tree Modules
+
+In order to use the logging interface in an out of tree module based on a
+gr_modtool template module, several CMake modifications are required.
+Without these changes, logging will be disabled.
+
+GrMiscUtils.cmake module must be included in the OOT module top level
+CMakeLists.Texts file, and the GR_LOGGING() function provided by GrMiscUtils
+must be called from the same top level CMakeLists.txt file. This will
+set the appropriate build environment and during that process, attempt
+to find the log4cpp package using the FindLog4Cpp.cmake module.
+This module is not included in the module by gr_modtool, but is part of
+the GNU Radio codebase and can be copied directly into the cmake/Modules/
+directory of the OOT module.
+
+Once these CMake changes are made, the  GR logging interface will function
+as documented on this page.
 
 \section logPy Logging from Python
 

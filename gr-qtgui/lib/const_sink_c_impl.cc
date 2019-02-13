@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2012,2014 Free Software Foundation, Inc.
+ * Copyright 2012,2014-2015 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -25,6 +25,7 @@
 #endif
 
 #include "const_sink_c_impl.h"
+
 #include <gnuradio/io_signature.h>
 #include <gnuradio/prefs.h>
 #include <string.h>
@@ -49,7 +50,7 @@ namespace gr {
 					 int nconnections,
 					 QWidget *parent)
       : sync_block("const_sink_c",
-		   io_signature::make(nconnections, nconnections, sizeof(gr_complex)),
+		   io_signature::make(0, nconnections, sizeof(gr_complex)),
 		   io_signature::make(0, 0, 0)),
 	d_size(size), d_buffer_size(2*size), d_name(name),
 	d_nconnections(nconnections), d_parent(parent)
@@ -66,6 +67,11 @@ namespace gr {
 
       d_index = 0;
 
+      // setup PDU handling input port
+      message_port_register_in(pmt::mp("in"));
+      set_msg_handler(pmt::mp("in"),
+                      boost::bind(&const_sink_c_impl::handle_pdus, this, _1));
+
       for(int i = 0; i < d_nconnections; i++) {
 	d_residbufs_real.push_back((double*)volk_malloc(d_buffer_size*sizeof(double),
                                                         volk_get_alignment()));
@@ -74,6 +80,14 @@ namespace gr {
 	memset(d_residbufs_real[i], 0, d_buffer_size*sizeof(double));
 	memset(d_residbufs_imag[i], 0, d_buffer_size*sizeof(double));
       }
+
+      // Used for PDU message input
+      d_residbufs_real.push_back((double*)volk_malloc(d_buffer_size*sizeof(double),
+                                                      volk_get_alignment()));
+      d_residbufs_imag.push_back((double*)volk_malloc(d_buffer_size*sizeof(double),
+                                                      volk_get_alignment()));
+      memset(d_residbufs_real[d_nconnections], 0, d_buffer_size*sizeof(double));
+      memset(d_residbufs_imag[d_nconnections], 0, d_buffer_size*sizeof(double));
 
       // Set alignment properties for VOLK
       const int alignment_multiple =
@@ -85,7 +99,6 @@ namespace gr {
       set_trigger_mode(TRIG_MODE_FREE, TRIG_SLOPE_POS, 0, 0);
 
       set_history(2);          // so we can look ahead for the trigger slope
-      declare_sample_delay(1); // delay the tags for a history of 2
    }
 
     const_sink_c_impl::~const_sink_c_impl()
@@ -94,7 +107,7 @@ namespace gr {
         d_main_gui->close();
 
       // d_main_gui is a qwidget destroyed with its parent
-      for(int i = 0; i < d_nconnections; i++) {
+      for(int i = 0; i < d_nconnections+1; i++) {
 	volk_free(d_residbufs_real[i]);
 	volk_free(d_residbufs_imag[i]);
       }
@@ -115,7 +128,7 @@ namespace gr {
 	d_qApplication = qApp;
       }
       else {
-#if QT_VERSION >= 0x040500
+#if QT_VERSION >= 0x040500 && QT_VERSION < 0x050000
         std::string style = prefs::singleton()->get_string("qtgui", "style", "raster");
         QApplication::setGraphicsSystem(QString(style.c_str()));
 #endif
@@ -123,13 +136,10 @@ namespace gr {
       }
 
       // If a style sheet is set in the prefs file, enable it here.
-      std::string qssfile = prefs::singleton()->get_string("qtgui","qss","");
-      if(qssfile.size() > 0) {
-        QString sstext = get_qt_style_sheet(QString(qssfile.c_str()));
-        d_qApplication->setStyleSheet(sstext);
-      }
+      check_set_qss(d_qApplication);
 
-      d_main_gui = new ConstellationDisplayForm(d_nconnections, d_parent);
+      int numplots = (d_nconnections > 0) ? d_nconnections : 1;
+      d_main_gui = new ConstellationDisplayForm(numplots, d_parent);
       d_main_gui->setNPoints(d_size);
 
       if(d_name.size() > 0)
@@ -196,37 +206,37 @@ namespace gr {
     }
 
     void
-    const_sink_c_impl::set_line_label(int which, const std::string &label)
+    const_sink_c_impl::set_line_label(unsigned int which, const std::string &label)
     {
       d_main_gui->setLineLabel(which, label.c_str());
     }
 
     void
-    const_sink_c_impl::set_line_color(int which, const std::string &color)
+    const_sink_c_impl::set_line_color(unsigned int which, const std::string &color)
     {
       d_main_gui->setLineColor(which, color.c_str());
     }
 
     void
-    const_sink_c_impl::set_line_width(int which, int width)
+    const_sink_c_impl::set_line_width(unsigned int which, int width)
     {
       d_main_gui->setLineWidth(which, width);
     }
 
     void
-    const_sink_c_impl::set_line_style(int which, int style)
+    const_sink_c_impl::set_line_style(unsigned int which, int style)
     {
       d_main_gui->setLineStyle(which, (Qt::PenStyle)style);
     }
 
     void
-    const_sink_c_impl::set_line_marker(int which, int marker)
+    const_sink_c_impl::set_line_marker(unsigned int which, int marker)
     {
       d_main_gui->setLineMarker(which, (QwtSymbol::Style)marker);
     }
 
     void
-    const_sink_c_impl::set_line_alpha(int which, double alpha)
+    const_sink_c_impl::set_line_alpha(unsigned int which, double alpha)
     {
       d_main_gui->setMarkerAlpha(which, (int)(255.0*alpha));
     }
@@ -270,37 +280,37 @@ namespace gr {
     }
 
     std::string
-    const_sink_c_impl::line_label(int which)
+    const_sink_c_impl::line_label(unsigned int which)
     {
       return d_main_gui->lineLabel(which).toStdString();
     }
 
     std::string
-    const_sink_c_impl::line_color(int which)
+    const_sink_c_impl::line_color(unsigned int which)
     {
       return d_main_gui->lineColor(which).toStdString();
     }
 
     int
-    const_sink_c_impl::line_width(int which)
+    const_sink_c_impl::line_width(unsigned int which)
     {
       return d_main_gui->lineWidth(which);
     }
 
     int
-    const_sink_c_impl::line_style(int which)
+    const_sink_c_impl::line_style(unsigned int which)
     {
       return d_main_gui->lineStyle(which);
     }
 
     int
-    const_sink_c_impl::line_marker(int which)
+    const_sink_c_impl::line_marker(unsigned int which)
     {
       return d_main_gui->lineMarker(which);
     }
 
     double
-    const_sink_c_impl::line_alpha(int which)
+    const_sink_c_impl::line_alpha(unsigned int which)
     {
       return (double)(d_main_gui->markerAlpha(which))/255.0;
     }
@@ -318,7 +328,8 @@ namespace gr {
 	d_index = 0;
 
 	// Resize residbuf and replace data
-	for(int i = 0; i < d_nconnections; i++) {
+        // +1 to handle PDU message input buffers
+	for(int i = 0; i < d_nconnections+1; i++) {
 	  volk_free(d_residbufs_real[i]);
 	  volk_free(d_residbufs_imag[i]);
 	  d_residbufs_real[i] = (double*)volk_malloc(d_buffer_size*sizeof(double),
@@ -357,6 +368,12 @@ namespace gr {
     const_sink_c_impl::enable_grid(bool en)
     {
       d_main_gui->setGrid(en);
+    }
+
+    void
+    const_sink_c_impl::enable_axis_labels(bool en)
+    {
+        d_main_gui->setAxisLabels(en);
     }
 
     void
@@ -422,7 +439,7 @@ namespace gr {
       if(tags.size() > 0) {
         d_triggered = true;
         trigger_index = tags[0].offset - nr;
-        d_start = d_index + trigger_index - 1;
+        d_start = d_index + trigger_index;
         d_end = d_start + d_size;
         d_trigger_count = 0;
       }
@@ -433,7 +450,7 @@ namespace gr {
     {
       int trigger_index;
       const gr_complex *in = (const gr_complex*)inputs[d_trigger_channel];
-      for(trigger_index = 0; trigger_index < nitems; trigger_index++) {
+      for(trigger_index = 0; trigger_index < nitems - 1; trigger_index++) {
         d_trigger_count++;
 
         // Test if trigger has occurred based on the input stream,
@@ -499,7 +516,7 @@ namespace gr {
         in = (const gr_complex*)input_items[n];
         volk_32fc_deinterleave_64f_x2(&d_residbufs_real[n][d_index],
                                       &d_residbufs_imag[n][d_index],
-                                      &in[0], nitems);
+                                      &in[history()-1], nitems);
       }
       d_index += nitems;
 
@@ -531,6 +548,56 @@ namespace gr {
       }
 
       return nitems;
+    }
+
+    void
+    const_sink_c_impl::handle_pdus(pmt::pmt_t msg)
+    {
+      size_t len = 0;
+      pmt::pmt_t dict, samples;
+
+      // Test to make sure this is either a PDU or a uniform vector of
+      // samples. Get the samples PMT and the dictionary if it's a PDU.
+      // If not, we throw an error and exit.
+      if(pmt::is_pair(msg)) {
+        dict = pmt::car(msg);
+        samples = pmt::cdr(msg);
+      }
+      else if(pmt::is_uniform_vector(msg)) {
+        samples = msg;
+      }
+      else {
+        throw std::runtime_error("const_sink_c: message must be either "
+                                 "a PDU or a uniform vector of samples.");
+      }
+
+      len = pmt::length(samples);
+
+      const gr_complex *in;
+      if(pmt::is_c32vector(samples)) {
+        in = (const gr_complex*)pmt::c32vector_elements(samples, len);
+      }
+      else {
+        throw std::runtime_error("const_sink_c: unknown data type "
+                                 "of samples; must be complex.");
+      }
+
+      set_nsamps(len);
+
+      // Plot if we're past the last update time
+      if(gr::high_res_timer_now() - d_last_time > d_update_time) {
+        d_last_time = gr::high_res_timer_now();
+
+        // Copy data into the buffers.
+        volk_32fc_deinterleave_64f_x2(d_residbufs_real[d_nconnections],
+                                      d_residbufs_imag[d_nconnections],
+                                      in, len);
+
+        d_qApplication->postEvent(d_main_gui,
+                                  new ConstUpdateEvent(d_residbufs_real,
+                                                       d_residbufs_imag,
+                                                       len));
+      }
     }
 
   } /* namespace qtgui */

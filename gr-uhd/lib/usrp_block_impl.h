@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /*
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2016 Free Software Foundation, Inc.
  *
  * This file is part of GNU Radio
  *
@@ -29,17 +29,17 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/bind.hpp>
 
-#define SET_CENTER_FREQ_FROM_INTERNALS(usrp_class, tune_method) \
-    ::uhd::tune_result_t \
-    usrp_class::_set_center_freq_from_internals(size_t chan) \
-    { \
-      _chans_to_tune.reset(chan); \
-      return _dev->tune_method(_curr_tune_req[chan], _stream_args.channels[chan]); \
-    }
 
 namespace gr {
   namespace uhd {
 
+      static const std::string ALL_GAINS = ::uhd::usrp::multi_usrp::ALL_GAINS;
+
+#ifdef UHD_USRP_MULTI_USRP_LO_CONFIG_API
+      static const std::string ALL_LOS = ::uhd::usrp::multi_usrp::ALL_LOS;
+#else
+      static const std::string ALL_LOS;
+#endif
     class usrp_block_impl : virtual public usrp_block
     {
      public:
@@ -205,10 +205,10 @@ namespace gr {
       }
 
       //! Like set_center_freq(), but uses _curr_freq and _curr_lo_offset
-      virtual ::uhd::tune_result_t _set_center_freq_from_internals(size_t chan) = 0;
+      virtual ::uhd::tune_result_t _set_center_freq_from_internals(size_t chan, pmt::pmt_t direction) = 0;
 
       //! Calls _set_center_freq_from_internals() on all channels
-      void _set_center_freq_from_internals_allchans();
+      void _set_center_freq_from_internals_allchans(pmt::pmt_t direction);
 
       /**********************************************************************
        * Members
@@ -216,7 +216,6 @@ namespace gr {
       //! Shared pointer to the underlying multi_usrp object
       ::uhd::usrp::multi_usrp::sptr _dev;
       ::uhd::stream_args_t _stream_args;
-      boost::shared_ptr< ::uhd::io_type_t > _type;
       //! Number of channels (i.e. number of in- or outputs)
       size_t _nchan;
       bool _stream_now;
@@ -239,4 +238,3 @@ namespace gr {
 } /* namespace gr */
 
 #endif /* INCLUDED_GR_UHD_BLOCK_IMPL_H */
-

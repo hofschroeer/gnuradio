@@ -36,8 +36,9 @@ GR_PYTHON_INSTALL(
     fec_test.py
     bercurve_generator.py
     DESTINATION ${GR_PYTHON_DIR}/gnuradio/fec
-    COMPONENT "fec_python"
 )
+
+add_subdirectory(polar)
 
 ########################################################################
 # Handle the unit tests
@@ -45,18 +46,34 @@ GR_PYTHON_INSTALL(
 if(ENABLE_TESTING)
 
 list(APPEND GR_TEST_PYTHON_DIRS
+    ${CMAKE_BINARY_DIR}/gnuradio-runtime/swig
+    ${CMAKE_BINARY_DIR}/gnuradio-runtime/python 
     ${CMAKE_BINARY_DIR}/gr-fec/python
     ${CMAKE_BINARY_DIR}/gr-fec/swig
     ${CMAKE_BINARY_DIR}/gr-blocks/python
     ${CMAKE_BINARY_DIR}/gr-blocks/swig
+    ${CMAKE_BINARY_DIR}/gr-fft/swig
+    ${CMAKE_BINARY_DIR}/gr-analog/swig
+    ${CMAKE_BINARY_DIR}/gr-digital/swig
+    ${CMAKE_BINARY_DIR}/gr-filter/swig	
 )
 
 list(APPEND GR_TEST_TARGET_DEPS gnuradio-fec)
 
 include(GrTest)
 file(GLOB py_qa_test_files "qa_*.py")
+
+# Without GSL, we don't build some of the LDPC work, so we can't test
+# it here.
+if(NOT GSL_FOUND)
+  list(REMOVE_ITEM py_qa_test_files
+    ${CMAKE_CURRENT_SOURCE_DIR}/qa_fecapi_ldpc.py
+    )
+endif(NOT GSL_FOUND)
+
 foreach(py_qa_test_file ${py_qa_test_files})
     get_filename_component(py_qa_test_name ${py_qa_test_file} NAME_WE)
-    GR_ADD_TEST(${py_qa_test_name} ${QA_PYTHON_EXECUTABLE} ${PYTHON_DASH_B} ${py_qa_test_file})
+    GR_ADD_TEST(${py_qa_test_name} ${QA_PYTHON_EXECUTABLE} -B ${py_qa_test_file})
 endforeach(py_qa_test_file)
+
 endif(ENABLE_TESTING)

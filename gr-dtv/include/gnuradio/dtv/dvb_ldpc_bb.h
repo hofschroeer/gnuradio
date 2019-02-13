@@ -1,6 +1,6 @@
 /* -*- c++ -*- */
 /* 
- * Copyright 2015 Free Software Foundation, Inc.
+ * Copyright 2015-2017 Free Software Foundation, Inc.
  * 
  * This is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,8 +32,8 @@ namespace gr {
      * \brief Encodes a LDPC (Low-Density Parity-Check) FEC.
      * \ingroup dtv
      *
-     * Input: Variable length FEC baseband frames with appended BCH (BCHFEC).
-     * Output: Normal or short FEC baseband frames with appended LPDC (LDPCFEC).
+     * Input: Variable length FEC baseband frames with appended BCH (BCHFEC). \n
+     * Output: Normal, medium or short FEC baseband frames with appended LPDC (LDPCFEC).
      */
     class DTV_API dvb_ldpc_bb : virtual public gr::block
     {
@@ -44,7 +44,7 @@ namespace gr {
        * \brief Create a baseband frame LDPC encoder.
        *
        * \param standard DVB standard (DVB-S2 or DVB-T2).
-       * \param framesize FEC frame size (normal or short).
+       * \param framesize FEC frame size (normal, medium or short).
        * \param rate FEC code rate.
        * \param constellation DVB-S2 constellation.
        */

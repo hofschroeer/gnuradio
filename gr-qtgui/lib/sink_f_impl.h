@@ -24,6 +24,7 @@
 #define INCLUDED_QTGUI_SINK_F_IMPL_H
 
 #include <gnuradio/qtgui/sink_f.h>
+
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/fft/fft.h>
 #include <gnuradio/high_res_timer.h>
@@ -45,6 +46,8 @@ namespace gr {
       double d_center_freq;
       double d_bandwidth;
       std::string d_name;
+
+      const pmt::pmt_t d_port;
 
       bool d_shift;
       fft::fft_complex *d_fft;

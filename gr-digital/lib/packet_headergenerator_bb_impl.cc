@@ -65,10 +65,11 @@ namespace gr {
     {
       set_output_multiple(d_formatter->header_len());
       // This is the worst case rate, because we don't know the true value, of course
-      set_relative_rate(d_formatter->header_len());
+      set_relative_rate((uint64_t)d_formatter->header_len(), 1);
       set_tag_propagation_policy(TPP_DONT);
     }
-void 
+
+    void
     packet_headergenerator_bb_impl::set_header_formatter(packet_header_default::sptr header_formatter)
     {
       gr::thread::scoped_lock guard(d_setlock);
